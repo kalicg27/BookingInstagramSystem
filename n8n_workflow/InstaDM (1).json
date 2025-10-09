@@ -1,0 +1,401 @@
+{
+  "name": "InstaDM",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "d0b57e0d-9e5d-4d3a-bb00-ffabcd3d4374",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -80,
+        48
+      ],
+      "id": "432d7926-27f0-4bf1-b6b9-094c24dbb13b",
+      "name": "Webhook",
+      "webhookId": "d0b57e0d-9e5d-4d3a-bb00-ffabcd3d4374"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "63aee13b-d05b-4dc4-bb9c-ed9aa98e2100",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "testtest",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "911626fa-7ccb-486c-b634-0109c6fea523",
+              "leftValue": "={{ $json.query['hub.mode'] }}",
+              "rightValue": "subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        -128
+      ],
+      "id": "c88e2854-17c9-432c-ab18-2623e4a9fbee",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        432,
+        -144
+      ],
+      "id": "ffbc5c42-25a3-47f8-8143-f477e53b4cc5",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        256
+      ],
+      "id": "32eb67ee-ec2d-4e94-914c-c628894ecca0",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/v23.0/{{ $('Webhook').first().json.body.entry[0].messaging[0].recipient.id }}/messages?access_token=IGAALjIcuDuaFBZAFROa3JWZAHFRMThmbGhUeHJkNGFGYkk1S0toVnJFWEVnQms2UnEzZA0swb0RIVm9CdEhaaWRncS1iZAVdmU1ZAWa3U4V01PSjVJX2FXaHB5VVIxMHRWTGtmVVNHT2xvcWhDbk84YmNVcjJqN2JaSWs4NmJ6SzhVSQZDZD",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\n    \"id\": \"{{ $('Webhook').first().json.body.entry[0].messaging[0].sender.id }}\"\n  },\n  \"message\": {\n    \"text\": {{ JSON.stringify($json.output) }}\n  }\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        64
+      ],
+      "id": "29656e2f-d2d1-4345-a0de-0d897b4937f7",
+      "name": "Send Instagram DM"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.entry[0].messaging[0].sender.id }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -128,
+        256
+      ],
+      "id": "fec488ca-ac1a-4dd6-a20c-9222ae298e5a",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "XYATnB15qQDd73wC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.entry[0].messaging[0].message.text }}\n",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a helpful AI assistant.\n\n# You have access to these tools:\n\n1) A Google Calendar tool that allows you to create, reschedule, and delete events in the calendar.\n\n2) Several Google Sheet tools:\n- \"Google Sheet - Add Row\": allows you to add new rows to a Google Sheet\n- \"Google Sheet - Update Row\": allows you to update rows in a Google Sheet\n- \"Google Sheet - Read\": allows you to read content of the Google Sheet\n\n3) Gmail - Send Confirmation User: allows you to send a confirmation email to the user after the booking is confirmed.\n\nThe current time and date is the following Polish Time Zone: {{ $now }}.\n\n- Use the 'check availability tool' to verify the requested time slot.\n- This is the current date in Poland for your understanding:\n  {{ DateTime.now().setZone('Australia/Sydney').toISO() }}\n\n- You *must resolve any relative date expressions* like “tomorrow”, “next Friday”, or “this weekend” by referencing the current date above.\n- Convert *all interpreted dates* into strict ISO 8601 format:\n  `YYYY-MM-DDTHH:MM:SS+HH:MM`, where the offset is either `+10:00` or `+11:00`\n  depending on daylight saving time in Poland.\n\n# Your Task:\n1) Start by asking the user:\n\"Would you like to book an appointment?\"\n\nIf the user responds with yes, begin collecting their contact information.\n\nYou must always collect the contact information in the following strict order:\n\n- First: Email address\n  → This will be used as the unique identifier to match the row in the Google Sheet.\n  → After receiving the email address, immediately check if a row with this email already exists using \"Google Sheet - Read\".\n  - If found, use \"Google Sheet - Update Row\" to update the existing row.\n  - If not found, use \"Google Sheet - Add Row\" to create a new one with the email.\n\n- Then: Full name\n- Then: Phone number\n- Then: Location or time zone\n\n❗ Only ask for one piece of information at a time.\n❗ Wait for the user’s reply before asking the next question.\n❗ After every response, immediately update the Google Sheet using \"Google Sheet - Update Row\", matched by the email address.\n\n2) You must always store all user information (email address, name, phone number, and location/time zone) in the Google Sheet.\n\n2.5) After collecting the location/time zone, ask the user:\n\"What would you like to discuss during your appointment?\"\n\n- Wait for the user’s response.\n- Then immediately update the same row in the Google Sheet using \"Google Sheet - Update Row\", matched by the email address.\n- Save the user’s response as the appointment topic or notes.\n\n3) Once the user’s contact information and discussion topic have been collected, you must offer 5 available time slots for booking.\n\n- Use the assistant’s local time zone (German time) to determine availability.\n\n- The available office hours are:\n  - Monday to Friday\n  - Morning block: 09:00–12:00\n  - Afternoon block: 13:00–17:00\n  - (Never offer times between 12:00 and 13:00)\n\n- Do not offer any time slots that fall outside of these hours in German time, even if they appear to be valid in the user’s local time zone.\n\n- When a user requests a time range (e.g., \"afternoon\"), follow this logic:\n  1. Understand the time range based on the user’s time zone.\n  2. Convert that time range into German time.\n  3. Only offer time slots that match both the user’s intent and fall within the German office hours.\n\n- You must check that a full 60-minute block is available:\n  - The start and end time must not conflict with any existing calendar event.\n  - The time slot must begin at least 24 hours in the future.\n\n- Always offer the next 5 available 60-minute time slots that meet the above criteria.\n\n- Only display the time slots in the user’s time zone.\n  → Do not mention German time anywhere in your response.\n  → Do not include time conversions in parentheses.\n\n- Present the time slots in a simple, friendly format like:\n  \"Here are the next available time slots in your local time zone:\n   - Thursday at 10:00 AM\n   - Friday at 11:30 AM\n   …\"\n\n- If no valid slots match the user’s requested period (e.g., afternoon), politely inform the user and offer the next closest options.\n\n- Never mention unavailable or already booked time slots.\n  Only show the free ones. Do not include notes, reminders, or explanations about other bookings.\n\n❗ You must not manually calculate or estimate time zone offsets.\n→ Use the Google Calendar tool to convert and format times.\n→ Always respect daylight saving time (DST) in both the user’s and assistant’s time zone.\n\n4) When the user confirms a preferred date and time, you must:\n\n- Create an event in the Google Calendar at the selected time.\n- Appointments should always be scheduled for 60 minutes unless the user specifies otherwise.\n- Do not create a new row in the Google Sheet.\n- Instead, use the tool \"Google Sheet - Update Row\" to update the existing row corresponding to the user (matched by email address) and add the selected date and time as the confirmed appointment.\n\n- The appointment time saved in the Google Sheet must always be in the assistant’s local time (German time) — never in the user’s time zone.\n\n- After the booking is confirmed, send a confirmation email to the user using the \"Gmail - Send Confirmation User\" tool.\n\n- The email must include:\n  - The confirmed appointment date and time (in the user’s local time zone)\n  - The user’s name and topic of discussion\n  - A short, friendly message confirming the booking\n\nOnly send the confirmation email after the calendar event has been created and all data has been stored in the Google Sheet.\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        336,
+        64
+      ],
+      "id": "bdfb5145-3781-41e1-a119-5e219c6feb15",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        304
+      ],
+      "id": "f7ddd51c-98a0-4131-9d8d-09f198963fc6",
+      "name": "Calendar Read",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "start": "={{ $fromAI(\"start\",\"date and time for when the event should start\") }}",
+        "end": "={{ $fromAI(\"end\",\"date and time for when the event should end\") }}",
+        "additionalFields": {
+          "summary": "={{ $fromAI(\"itle\",\"title of the event\") }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        160,
+        304
+      ],
+      "id": "8114da72-e821-4bb3-9ce4-a1784ea43a72",
+      "name": "Calendar Creat",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "eventId": "={{ $fromAI(\"id\",\"the id of the event\") }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        320,
+        304
+      ],
+      "id": "4628d7ad-78a8-46ab-9dc0-87dca11cd9d3",
+      "name": "Calendar Delete",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        272
+      ],
+      "id": "4e33ecf0-c246-41e3-abd7-9af8dfd53e4b",
+      "name": "Get row(s) in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Read": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Creat": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Delete": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedPerExecution": 0
+  },
+  "versionId": "ba39ab9e-6a88-4ff2-935a-cde8afac6fe0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "id": "RLjD9anEY42XI72v",
+  "tags": []
+}
