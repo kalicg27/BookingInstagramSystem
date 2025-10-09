@@ -1,0 +1,376 @@
+{
+  "name": "Google Calendar Booking System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "book-appointment",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "booking-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract and validate booking request data\nconst body = $input.item.json.body;\n\nreturn {\n  json: {\n    email: body.email,\n    name: body.name,\n    phone: body.phone || '',\n    requestedDate: body.date,\n    requestedTime: body.time,\n    duration: body.duration || 60,\n    notes: body.notes || '',\n    service: body.service || 'General Appointment'\n  }\n};"
+      },
+      "id": "extract-data",
+      "name": "Extract Booking Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": "={{ $('Extract Booking Data').item.json.calendarId || 'primary' }}",
+        "start": "={{ $('Extract Booking Data').item.json.requestedDate }}T00:00:00",
+        "end": "={{ $('Extract Booking Data').item.json.requestedDate }}T23:59:59",
+        "options": {
+          "timeZone": "UTC"
+        }
+      },
+      "id": "check-availability",
+      "name": "Check Calendar Availability",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [650, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check if requested time slot is available\nconst requestedDate = $('Extract Booking Data').item.json.requestedDate;\nconst requestedTime = $('Extract Booking Data').item.json.requestedTime;\nconst duration = $('Extract Booking Data').item.json.duration;\n\n// Parse requested datetime\nconst requestedStart = new Date(`${requestedDate}T${requestedTime}:00`);\nconst requestedEnd = new Date(requestedStart.getTime() + duration * 60000);\n\n// Get existing events\nconst events = $input.all();\n\nlet isAvailable = true;\nlet conflictingEvent = null;\n\nfor (const event of events) {\n  const eventStart = new Date(event.json.start.dateTime || event.json.start.date);\n  const eventEnd = new Date(event.json.end.dateTime || event.json.end.date);\n  \n  // Check for overlap\n  if (requestedStart < eventEnd && requestedEnd > eventStart) {\n    isAvailable = false;\n    conflictingEvent = event.json.summary;\n    break;\n  }\n}\n\nconst bookingData = $('Extract Booking Data').item.json;\n\nreturn {\n  json: {\n    ...bookingData,\n    isAvailable,\n    conflictingEvent,\n    requestedStartISO: requestedStart.toISOString(),\n    requestedEndISO: requestedEnd.toISOString()\n  }\n};"
+      },
+      "id": "validate-slot",
+      "name": "Validate Time Slot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isAvailable }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-if-available",
+      "name": "Is Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendar": "primary",
+        "start": "={{ $json.requestedStartISO }}",
+        "end": "={{ $json.requestedEndISO }}",
+        "summary": "={{ $json.service }} - {{ $json.name }}",
+        "description": "Booking Details:\nName: {{ $json.name }}\nEmail: {{ $json.email }}\nPhone: {{ $json.phone }}\nService: {{ $json.service }}\n\nNotes: {{ $json.notes }}",
+        "options": {
+          "sendUpdates": "all"
+        },
+        "additionalFields": {
+          "attendees": [
+            {
+              "email": "={{ $json.email }}",
+              "displayName": "={{ $json.name }}"
+            }
+          ],
+          "location": "",
+          "reminders": {
+            "useDefault": false,
+            "overrides": [
+              {
+                "method": "email",
+                "minutes": 1440
+              },
+              {
+                "method": "popup",
+                "minutes": 30
+              }
+            ]
+          }
+        }
+      },
+      "id": "create-event",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [1250, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Appointment booked successfully!\",\n  \"booking\": {\n    \"eventId\": \"{{ $json.id }}\",\n    \"summary\": \"{{ $json.summary }}\",\n    \"start\": \"{{ $json.start.dateTime }}\",\n    \"end\": \"{{ $json.end.dateTime }}\",\n    \"meetLink\": \"{{ $json.hangoutLink }}\",\n    \"htmlLink\": \"{{ $json.htmlLink }}\"\n  }\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"Sorry, the requested time slot is not available.\",\n  \"conflictingEvent\": \"{{ $json.conflictingEvent }}\",\n  \"requestedTime\": \"{{ $json.requestedDate }} {{ $json.requestedTime }}\"\n}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "id": "unavailable-response",
+      "name": "Unavailable Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Extract Booking Data').item.json.email }}",
+        "toEmail": "={{ $('Create Calendar Event').item.json.creator.email }}",
+        "subject": "New Appointment Booked - {{ $('Extract Booking Data').item.json.name }}",
+        "emailType": "html",
+        "message": "=<h2>New Appointment Confirmation</h2>\n<p>A new appointment has been booked:</p>\n<ul>\n  <li><strong>Name:</strong> {{ $('Extract Booking Data').item.json.name }}</li>\n  <li><strong>Email:</strong> {{ $('Extract Booking Data').item.json.email }}</li>\n  <li><strong>Phone:</strong> {{ $('Extract Booking Data').item.json.phone }}</li>\n  <li><strong>Service:</strong> {{ $('Extract Booking Data').item.json.service }}</li>\n  <li><strong>Date & Time:</strong> {{ $('Extract Booking Data').item.json.requestedDate }} at {{ $('Extract Booking Data').item.json.requestedTime }}</li>\n  <li><strong>Duration:</strong> {{ $('Extract Booking Data').item.json.duration }} minutes</li>\n</ul>\n<p><strong>Notes:</strong> {{ $('Extract Booking Data').item.json.notes }}</p>\n<p><a href=\"{{ $json.htmlLink }}\">View in Google Calendar</a></p>",
+        "options": {}
+      },
+      "id": "send-confirmation",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1450, 100],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "check-availability",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "availability-webhook",
+      "name": "Check Availability Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 600],
+      "webhookId": "check-availability"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract date from query parameters\nconst query = $input.item.json.query;\n\nreturn {\n  json: {\n    date: query.date || new Date().toISOString().split('T')[0],\n    duration: parseInt(query.duration) || 60\n  }\n};"
+      },
+      "id": "parse-availability-request",
+      "name": "Parse Availability Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 600]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": "primary",
+        "start": "={{ $json.date }}T00:00:00",
+        "end": "={{ $json.date }}T23:59:59",
+        "options": {
+          "timeZone": "UTC"
+        }
+      },
+      "id": "get-events",
+      "name": "Get Day Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [650, 600],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Calculate available time slots\nconst date = $('Parse Availability Request').item.json.date;\nconst duration = $('Parse Availability Request').item.json.duration;\nconst events = $input.all();\n\n// Business hours: 9 AM to 5 PM\nconst startHour = 9;\nconst endHour = 17;\nconst slotDuration = duration;\n\nconst availableSlots = [];\n\n// Generate all possible slots\nfor (let hour = startHour; hour < endHour; hour++) {\n  for (let minute = 0; minute < 60; minute += 30) {\n    const slotStart = new Date(`${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);\n    const slotEnd = new Date(slotStart.getTime() + slotDuration * 60000);\n    \n    // Check if slot extends beyond business hours\n    if (slotEnd.getHours() > endHour || (slotEnd.getHours() === endHour && slotEnd.getMinutes() > 0)) {\n      continue;\n    }\n    \n    // Check for conflicts\n    let hasConflict = false;\n    for (const event of events) {\n      const eventStart = new Date(event.json.start.dateTime || event.json.start.date);\n      const eventEnd = new Date(event.json.end.dateTime || event.json.end.date);\n      \n      if (slotStart < eventEnd && slotEnd > eventStart) {\n        hasConflict = true;\n        break;\n      }\n    }\n    \n    if (!hasConflict) {\n      availableSlots.push({\n        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,\n        startISO: slotStart.toISOString(),\n        endISO: slotEnd.toISOString()\n      });\n    }\n  }\n}\n\nreturn {\n  json: {\n    date,\n    availableSlots,\n    totalSlots: availableSlots.length\n  }\n};"
+      },
+      "id": "calculate-slots",
+      "name": "Calculate Available Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "availability-response",
+      "name": "Availability Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 600]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Booking Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Booking Data": {
+      "main": [
+        [
+          {
+            "node": "Check Calendar Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Calendar Availability": {
+      "main": [
+        [
+          {
+            "node": "Validate Time Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Time Slot": {
+      "main": [
+        [
+          {
+            "node": "Is Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unavailable Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Availability Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Availability Request": {
+      "main": [
+        [
+          {
+            "node": "Get Day Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Day Events": {
+      "main": [
+        [
+          {
+            "node": "Calculate Available Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Available Slots": {
+      "main": [
+        [
+          {
+            "node": "Availability Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-09T12:00:00.000Z",
+  "versionId": "1"
+}
