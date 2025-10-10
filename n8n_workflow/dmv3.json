@@ -1,0 +1,679 @@
+{
+  "name": "Instagram Haircut Booking Agent - Main Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Instagram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "instagram-booking-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true } }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract Instagram message data\nconst body = $input.item.json.body;\n\nreturn {\n  json: {\n    senderId: body.entry?.[0]?.messaging?.[0]?.sender?.id || '',\n    messageText: body.entry?.[0]?.messaging?.[0]?.message?.text || '',\n    timestamp: body.entry?.[0]?.time || Date.now(),\n    messageId: body.entry?.[0]?.messaging?.[0]?.message?.mid || ''\n  }\n};"
+      },
+      "id": "extract-message-data",
+      "name": "Extract Message Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Client_ID",
+              "lookupValue": "={{ $json.senderId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-existing-client",
+      "name": "Check Existing Client",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [850, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.Client_ID }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "client-exists-check",
+      "name": "Client Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Retrieve conversation history from previous node\nconst clientData = $input.all()[0].json;\nconst currentMessage = $input.all()[1].json;\n\n// Build conversation context\nconst conversationHistory = clientData.Conversation_History \n  ? JSON.parse(clientData.Conversation_History) \n  : [];\n\n// Add current message to history\nconversationHistory.push({\n  role: 'user',\n  content: currentMessage.messageText,\n  timestamp: currentMessage.timestamp\n});\n\nreturn {\n  json: {\n    senderId: currentMessage.senderId,\n    messageText: currentMessage.messageText,\n    conversationHistory: conversationHistory,\n    clientData: clientData,\n    stage: clientData.Stage || 'collect_info'\n  }\n};"
+      },
+      "id": "load-conversation-context",
+      "name": "Load Conversation Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Initialize new client conversation\nconst currentMessage = $input.item.json;\n\nreturn {\n  json: {\n    senderId: currentMessage.senderId,\n    messageText: currentMessage.messageText,\n    conversationHistory: [\n      {\n        role: 'user',\n        content: currentMessage.messageText,\n        timestamp: currentMessage.timestamp\n      }\n    ],\n    clientData: {\n      Client_ID: currentMessage.senderId,\n      Name: null,\n      Email: null,\n      Phone: null,\n      Status: 'new'\n    },\n    stage: 'collect_info'\n  }\n};"
+      },
+      "id": "initialize-new-client",
+      "name": "Initialize New Client",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3:8b"
+            },
+            {
+              "name": "messages",
+              "value": "={{ JSON.stringify([\n  {\n    role: 'system',\n    content: `You are a friendly hair salon booking assistant on Instagram. Your goal is to:\n1. Greet clients warmly\n2. Determine if they want to book a haircut\n3. Collect: name, email, and phone number\n4. Ask for their preferred appointment date and time\n5. Confirm bookings clearly\n6. Handle rebooking and cancellations politely\n\nBusiness hours: Monday-Saturday, 9 AM - 6 PM\nEach appointment slot is 1 hour\n\nIMPORTANT RULES:\n- Keep responses SHORT (1-3 sentences max) - this is Instagram DM\n- Be conversational and friendly, use emojis sparingly\n- Ask for ONE piece of information at a time\n- If user provides date/time, extract it in ISO format\n- Always confirm before booking\n\nCurrent stage: ${$json.stage}\nClient data: ${JSON.stringify($json.clientData)}\n\nRESPONSE FORMAT:\nProvide a natural response, then on a new line add a JSON block:\n---JSON---\n{\n  \"intent\": \"booking/inquiry/cancel\",\n  \"extracted_data\": {\n    \"name\": \"value or null\",\n    \"email\": \"value or null\",\n    \"phone\": \"value or null\",\n    \"date\": \"YYYY-MM-DD or null\",\n    \"time\": \"HH:MM or null\"\n  },\n  \"next_action\": \"ask_name/ask_email/ask_phone/ask_datetime/check_availability/confirm_booking\"\n}\n---JSON---`\n  },\n  ...$json.conversationHistory\n]) }}"
+            },
+            {
+              "name": "stream",
+              "value": "false"
+            },
+            {
+              "name": "options",
+              "value": "={{ JSON.stringify({\n  temperature: 0.7,\n  top_p: 0.9,\n  num_predict: 200\n}) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "ollama-chat",
+      "name": "Ollama Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse Ollama response and extract structured data\nconst response = $input.item.json.message.content;\n\n// Split response into message and JSON\nconst parts = response.split('---JSON---');\nconst userMessage = parts[0].trim();\nlet extractedData = {};\nlet nextAction = 'continue';\n\nif (parts.length > 1) {\n  try {\n    const jsonStr = parts[1].trim();\n    extractedData = JSON.parse(jsonStr);\n    nextAction = extractedData.next_action || 'continue';\n  } catch (e) {\n    // If JSON parsing fails, continue without structured data\n    console.log('JSON parsing failed:', e);\n  }\n}\n\nreturn {\n  json: {\n    userMessage: userMessage,\n    extractedData: extractedData,\n    nextAction: nextAction,\n    senderId: $input.all()[0].json.senderId,\n    conversationHistory: $input.all()[0].json.conversationHistory\n  }\n};"
+      },
+      "id": "parse-ollama-response",
+      "name": "Parse Ollama Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ text: $json.userMessage }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-instagram-message",
+      "name": "Send Instagram Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1850, 300],
+      "credentials": {
+        "instagramApi": {
+          "id": "YOUR_INSTAGRAM_API_CREDENTIAL_ID",
+          "name": "Instagram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.nextAction }}",
+              "value2": "check_availability"
+            }
+          ]
+        }
+      },
+      "id": "check-if-ready-for-booking",
+      "name": "Ready for Booking?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client_ID": "={{ $json.senderId }}",
+            "Name": "={{ $json.extractedData.extracted_data?.name }}",
+            "Email": "={{ $json.extractedData.extracted_data?.email }}",
+            "Phone": "={{ $json.extractedData.extracted_data?.phone }}",
+            "Status": "pending_booking",
+            "Stage": "check_availability",
+            "Conversation_History": "={{ JSON.stringify($json.conversationHistory) }}",
+            "Created_At": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-client-data",
+      "name": "Update Client Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2050, 150],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse requested date and time\nconst extractedData = $input.item.json.extractedData.extracted_data || {};\nconst requestedDate = extractedData.date;\nconst requestedTime = extractedData.time;\n\nif (!requestedDate || !requestedTime) {\n  throw new Error('Date or time not provided');\n}\n\n// Combine date and time\nconst appointmentDateTime = new Date(`${requestedDate}T${requestedTime}:00`);\n\n// Calculate end time (1 hour appointment)\nconst endDateTime = new Date(appointmentDateTime);\nendDateTime.setHours(endDateTime.getHours() + 1);\n\nreturn {\n  json: {\n    startDateTime: appointmentDateTime.toISOString(),\n    endDateTime: endDateTime.toISOString(),\n    dateFormatted: requestedDate,\n    timeFormatted: requestedTime,\n    clientData: $input.item.json\n  }\n};"
+      },
+      "id": "prepare-calendar-check",
+      "name": "Prepare Calendar Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 450]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "options": {
+          "timeMin": "={{ $json.startDateTime }}",
+          "timeMax": "={{ $json.endDateTime }}"
+        }
+      },
+      "id": "check-calendar-availability",
+      "name": "Check Calendar Availability",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [2450, 450],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "YOUR_GOOGLE_CALENDAR_CREDENTIAL_ID",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "is-slot-available",
+      "name": "Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2650, 450]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "start": "={{ $('Prepare Calendar Check').item.json.startDateTime }}",
+        "end": "={{ $('Prepare Calendar Check').item.json.endDateTime }}",
+        "summary": "Haircut - {{ $('Parse Ollama Response').item.json.extractedData.extracted_data.name }}",
+        "description": "Client: {{ $('Parse Ollama Response').item.json.extractedData.extracted_data.name }}\\nEmail: {{ $('Parse Ollama Response').item.json.extractedData.extracted_data.email }}\\nPhone: {{ $('Parse Ollama Response').item.json.extractedData.extracted_data.phone }}",
+        "options": {
+          "sendUpdates": "all"
+        }
+      },
+      "id": "create-calendar-event",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [2850, 350],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "YOUR_GOOGLE_CALENDAR_CREDENTIAL_ID",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Bookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Booking_ID": "={{ $json.id }}",
+            "Client_ID": "={{ $('Parse Ollama Response').item.json.senderId }}",
+            "Name": "={{ $('Parse Ollama Response').item.json.extractedData.extracted_data.name }}",
+            "Email": "={{ $('Parse Ollama Response').item.json.extractedData.extracted_data.email }}",
+            "Phone": "={{ $('Parse Ollama Response').item.json.extractedData.extracted_data.phone }}",
+            "Service": "Haircut",
+            "Appointment_Date": "={{ $('Prepare Calendar Check').item.json.dateFormatted }}",
+            "Appointment_Time": "={{ $('Prepare Calendar Check').item.json.timeFormatted }}",
+            "Calendar_Event_ID": "={{ $json.id }}",
+            "Status": "confirmed",
+            "Created_At": "={{ $now.toISO() }}",
+            "Reminder_Sent": "false"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-booking-to-sheet",
+      "name": "Save Booking to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [3050, 350],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $('Parse Ollama Response').item.json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ \n  text: `✅ Perfect! Your haircut is booked for ${$('Prepare Calendar Check').item.json.dateFormatted} at ${$('Prepare Calendar Check').item.json.timeFormatted}. See you then! 💇‍♀️` \n}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-booking-confirmation",
+      "name": "Send Booking Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3250, 350],
+      "credentials": {
+        "instagramApi": {
+          "id": "YOUR_INSTAGRAM_API_CREDENTIAL_ID",
+          "name": "Instagram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3:8b"
+            },
+            {
+              "name": "messages",
+              "value": "={{ JSON.stringify([\n  {\n    role: 'system',\n    content: 'You are a helpful hair salon assistant. The requested time slot is not available. Suggest 3 alternative times within the next 3 days during business hours (Mon-Sat, 9 AM - 6 PM). Be friendly and apologetic.'\n  },\n  {\n    role: 'user',\n    content: `I wanted to book for ${$('Prepare Calendar Check').item.json.dateFormatted} at ${$('Prepare Calendar Check').item.json.timeFormatted} but it's not available. What other times do you have?`\n  }\n]) }}"
+            },
+            {
+              "name": "stream",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "suggest-alternative-times",
+      "name": "Suggest Alternative Times",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2850, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $('Parse Ollama Response').item.json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ text: $json.message.content }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-alternative-times",
+      "name": "Send Alternative Times",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3050, 550],
+      "credentials": {
+        "instagramApi": {
+          "id": "YOUR_INSTAGRAM_API_CREDENTIAL_ID",
+          "name": "Instagram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Instagram Webhook": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Message Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message Data": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Client": {
+      "main": [
+        [
+          {
+            "node": "Client Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client Exists?": {
+      "main": [
+        [
+          {
+            "node": "Load Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Initialize New Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Conversation Context": {
+      "main": [
+        [
+          {
+            "node": "Ollama Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize New Client": {
+      "main": [
+        [
+          {
+            "node": "Ollama Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat": {
+      "main": [
+        [
+          {
+            "node": "Parse Ollama Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Ollama Response": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Client Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Instagram Message": {
+      "main": [
+        [
+          {
+            "node": "Ready for Booking?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready for Booking?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Calendar Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Calendar Check": {
+      "main": [
+        [
+          {
+            "node": "Check Calendar Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Calendar Availability": {
+      "main": [
+        [
+          {
+            "node": "Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Suggest Alternative Times",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Save Booking to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Booking to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suggest Alternative Times": {
+      "main": [
+        [
+          {
+            "node": "Send Alternative Times",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-10T12:00:00.000Z",
+  "versionId": "1"
+}
