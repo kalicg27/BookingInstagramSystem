@@ -1,0 +1,5 @@
+Your job is to send a short reminder whatsapp message using the first name of {{ $json.body.name }}. It should also mention that his appointment regarding "{{ $json.body.topic }}" will take place on {{ $json.body.appointmentDate }}. However, the appointment time is based on the German time. Please convert the time to this correct timezone {{ $json.body.timezone }}. The current time is {{ $now }}. Sign off "Fabian" as this is my name.
+
+# Rules:
+1) Only generate the raw message and never use any introduction like "Certainly! Here's a short reminder message for Andreas:"
+2) Do not use line breaks.
