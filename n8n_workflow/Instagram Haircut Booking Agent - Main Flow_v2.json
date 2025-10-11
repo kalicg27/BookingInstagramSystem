@@ -1,0 +1,2196 @@
+{
+  "name": "Instagram Haircut Booking Agent - Main Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "b255f4f0-eade-41c6-be0d-392a99a3db07",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -528,
+        432
+      ],
+      "id": "654b3f60-e9f5-4ad4-8bc7-5b716bf02065",
+      "name": "Webhook",
+      "webhookId": "b255f4f0-eade-41c6-be0d-392a99a3db07"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        368,
+        320
+      ],
+      "id": "b57aa752-bccc-4491-ac7c-cb3447030f59",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "63aee13b-d05b-4dc4-bb9c-ed9aa98e2100",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "testn8n",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "911626fa-7ccb-486c-b634-0109c6fea523",
+              "leftValue": "={{ $json.query['hub.mode'] }}",
+              "rightValue": "subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        336
+      ],
+      "id": "5768d411-17a0-4100-b1c3-7accb0c12163",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1AxzEJb9Lg2sEUMzwCFW1sfui4SRSsclQulbzIuvhFuY/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Client_ID",
+              "lookupValue": "={{ $json.senderId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bf35253c-749e-44cf-9676-5cded22dd25c",
+      "name": "Check Existing Client",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1216,
+        272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.nextAction }}",
+              "value2": "check_availability"
+            }
+          ]
+        }
+      },
+      "id": "4a55dc2c-fc82-4d5a-a707-65cba434d5e4",
+      "name": "Ready for Booking?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1696,
+        976
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "id": "b3f802bc-c1a0-4626-813b-58a7ae22ea88",
+      "name": "Prepare Calendar Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        896
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "options": {
+          "timeMin": "={{ $json.startDateTime }}",
+          "timeMax": "={{ $json.endDateTime }}"
+        }
+      },
+      "id": "4a0a25df-7512-4080-b3a7-4d3a2bd5941b",
+      "name": "Check Calendar Availability",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        672
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}"
+            }
+          ]
+        }
+      },
+      "id": "86cab578-8568-4a98-a38e-4773bb15fe62",
+      "name": "Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        976
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "start": "={{ $('AI Agent1').item.json.output.calendardatetime_start }}",
+        "end": "={{ $('AI Agent1').item.json.output.calendardatetime_end }}",
+        "additionalFields": {
+          "summary": "={{ $('AI Agent1').item.json.output.title }}"
+        }
+      },
+      "id": "425b60da-2b77-4f26-a087-dbc7c670d0db",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        768,
+        624
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1AxzEJb9Lg2sEUMzwCFW1sfui4SRSsclQulbzIuvhFuY/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Bookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Booking_ID": "={{ $json.id }}",
+            "Client_ID": "={{ $('Parse Ollama Response').item.json.senderId }}",
+            "Name": "={{ $('Parse Ollama Response').item.json.extractedData.extracted_data.name }}",
+            "Email": "={{ $('Parse Ollama Response').item.json.extractedData.extracted_data.email }}",
+            "Phone": "={{ $('Parse Ollama Response').item.json.extractedData.extracted_data.phone }}",
+            "Service": "Haircut",
+            "Appointment_Date": "={{ $('Prepare Calendar Check').item.json.dateFormatted }}",
+            "Appointment_Time": "={{ $('Prepare Calendar Check').item.json.timeFormatted }}",
+            "Calendar_Event_ID": "={{ $json.id }}",
+            "Status": "confirmed",
+            "Created_At": "={{ $now.toISO() }}",
+            "Reminder_Sent": "false"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Booking_ID",
+              "displayName": "Booking_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Client_ID",
+              "displayName": "Client_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Service",
+              "displayName": "Service",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Appointment_Date",
+              "displayName": "Appointment_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Appointment_Time",
+              "displayName": "Appointment_Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Calendar_Event_ID",
+              "displayName": "Calendar_Event_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created_At",
+              "displayName": "Created_At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reminder_Sent",
+              "displayName": "Reminder_Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "40551365-0664-400a-ac89-6c6f4b3aa83a",
+      "name": "Save Booking to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2672,
+        704
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $('Parse Ollama Response').item.json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ \n  text: `✅ Perfect! Your haircut is booked for ${$('Prepare Calendar Check').item.json.dateFormatted} at ${$('Prepare Calendar Check').item.json.timeFormatted}. See you then! 💇‍♀️` \n}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f7b48af5-fbde-4c07-99d3-1922ec1a1c53",
+      "name": "Send Booking Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3120,
+        704
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3:8b"
+            },
+            {
+              "name": "messages",
+              "value": "={{ JSON.stringify([\n  {\n    role: 'system',\n    content: 'You are a helpful hair salon assistant. The requested time slot is not available. Suggest 3 alternative times within the next 3 days during business hours (Mon-Sat, 9 AM - 6 PM). Be friendly and apologetic.'\n  },\n  {\n    role: 'user',\n    content: `I wanted to book for ${$('Prepare Calendar Check').item.json.dateFormatted} at ${$('Prepare Calendar Check').item.json.timeFormatted} but it's not available. What other times do you have?`\n  }\n]) }}"
+            },
+            {
+              "name": "stream",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "45a8dd44-0fe0-4001-adba-d98cef45c560",
+      "name": "Suggest Alternative Times",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2464,
+        896
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $('Parse Ollama Response').item.json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ text: $json.message.content }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "260e62ae-5cb1-49da-9598-f22236a8705c",
+      "name": "Send Alternative Times",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2944,
+        864
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/v23.0/{{ $('Webhook').first().json.body.entry[0].messaging[0].recipient.id }}/messages?access_token=IGAFe6h5JqrGNBZAFRVQTRqYXhIS1VfQmowRnE5aDNCRUR0ZA1BqSV8tbmtBaUpiZAkdpWjd6VGJsUUx1VXZATZAHJMeDdKNlBQUUJucHBqdlc2VEVTM1NXWWo5dmQzeUhyVjl3ZAEZARQ1UtQXZA1THZAYWnQ1NFE5dF9vaG83VmtXUEc1awZDZD",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\n    \"id\": \"{{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}\"\n  },\n  \"message\": {\n    \"text\": {{ JSON.stringify($json.output.message) }}\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        752,
+        480
+      ],
+      "id": "384df5d3-a18c-4e68-862e-a04c3a6b361f",
+      "name": "Send Instagram DM"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/v23.0/{{ $('Webhook').first().json.body.entry[0].messaging[0].recipient.id }}/messages?access_token=IGAALjIcuDuaFBZAFROa3JWZAHFRMThmbGhUeHJkNGFGYkk1S0toVnJFWEVnQms2UnEzZA0swb0RIVm9CdEhaaWRncS1iZAVdmU1ZAWa3U4V01PSjVJX2FXaHB5VVIxMHRWTGtmVVNHT2xvcWhDbk84YmNVcjJqN2JaSWs4NmJ6SzhVSQZDZD",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\n    \"id\": \"{{ $('Webhook').first().json.body.entry[0].messaging[0].sender.id }}\"\n  },\n  \"message\": {\n    \"text\": {{ JSON.stringify($json.output) }}\n  }\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3104,
+        480
+      ],
+      "id": "17386303-6922-4c73-94c5-feac0e95d467",
+      "name": "Send Instagram DM1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/v23.0/{{ $('Webhook').first().json.body.entry[0].messaging[0].recipient.id }}/messages?access_token=IGAALjIcuDuaFBZAFROa3JWZAHFRMThmbGhUeHJkNGFGYkk1S0toVnJFWEVnQms2UnEzZA0swb0RIVm9CdEhaaWRncS1iZAVdmU1ZAWa3U4V01PSjVJX2FXaHB5VVIxMHRWTGtmVVNHT2xvcWhDbk84YmNVcjJqN2JaSWs4NmJ6SzhVSQZDZD",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\n    \"id\": \"{{ $('Webhook').first().json.body.entry[0].messaging[0].sender.id }}\"\n  },\n  \"message\": {\n    \"text\": {{ JSON.stringify($json.output) }}\n  }\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2656,
+        896
+      ],
+      "id": "cfd79fd7-5dfd-4f78-81f9-cb9dc9b09d18",
+      "name": "Send Instagram DM2",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        1232
+      ],
+      "id": "35d2cb94-e87c-4daa-9cd5-1501d551338a",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.entry[0].messaging[0].sender.id }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -288,
+        752
+      ],
+      "id": "81979bbc-94b9-403f-b311-7b50b739cca4",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "XYATnB15qQDd73wC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1AxzEJb9Lg2sEUMzwCFW1sfui4SRSsclQulbzIuvhFuY/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client_ID": "={{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}",
+            "Created_At": "={{ $now.toISO() }}",
+            "Status": "pending",
+            "Name": "={{ $json.output.name }}",
+            "Email": "={{ $json.output.email }}",
+            "Phone": "={{ $json.output.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Client_ID",
+              "displayName": "Client_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created_At",
+              "displayName": "Created_At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        768,
+        800
+      ],
+      "id": "a9eb5a1c-99b3-497a-9021-3738621d817f",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1216,
+        1104
+      ],
+      "id": "a832d8dd-7e8b-4095-8781-fffc52ca4afa",
+      "name": "Create an event in Google Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"type\": \"object\",\n  \"required\": [\"name\", \"email\", \"phone\", \"service\", \"intent\"],\n  \"properties\": {\n    \"name\":   { \"type\": \"string\" },\n    \"email\":  { \"type\": \"string\" },\n    \"phone\":  { \"type\": \"string\" },\n    \"service\":{ \"type\": \"string\" },\n    \"intent\": { \"type\": \"string\" }\n  },\n  \"additionalProperties\": false\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1408,
+        1120
+      ],
+      "id": "be211d08-f15a-4454-990b-79194caa67a7",
+      "name": "Structured Output Parser",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', `date and time for when the event shouold start`, 'string') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', `date and time for when the event shouold end`, 'string') }}",
+        "additionalFields": {
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1760,
+        1552
+      ],
+      "id": "315af859-273f-451d-9b16-f3b1e0a91ebf",
+      "name": "Create an event in Google Calendar1",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n\"message\": \"Hi how can I help you?\",\n\"name\": \"Kamran\",\n\"email\": \"jsdfhjdsh@gmail.com\",\n\"phone\": \"485658781\",\n\"preferred_date\": \"25 October\",\n\"preferred_time\": \"17:00\",\n\"calendardatetime_start\": \"2025-10-11T03:33:46\",\n\"calendardatetime_end\": \"2025-10-11T04:33:46\",\n\"title\": \"Haircut Kamran\",\n\"status\":\"Pending\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        256,
+        1248
+      ],
+      "id": "992d7302-0ef7-4f01-bc94-e10b9b77bebc",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7b685acc-99da-4fe7-929f-ae0e942cb901",
+      "name": "Instagram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        2128
+      ],
+      "webhookId": "instagram-booking-webhook",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true } }}",
+        "options": {}
+      },
+      "id": "90e4d97d-944f-4916-8a0f-62ce58b8366c",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        2128
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "id": "33e03c9a-f0b5-4f36-a707-4fd39ab9953a",
+      "name": "Extract Message Data1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        2128
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1AxzEJb9Lg2sEUMzwCFW1sfui4SRSsclQulbzIuvhFuY/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Client_ID",
+              "lookupValue": "={{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8efc36ed-e4a9-423d-91d5-16755c4f0984",
+      "name": "Check Existing Client1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        512,
+        1008
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.Client_ID }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "dfc42c6b-800e-415e-b61b-390403184d37",
+      "name": "Client Exists?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        416,
+        2128
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "id": "006937ea-cf5b-4ec3-85fe-c51d4a2d16a6",
+      "name": "Load Conversation Context1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        2032
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "id": "a8704291-b452-4fc8-95d2-09566609e6cf",
+      "name": "Initialize New Client1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        2224
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3:8b"
+            },
+            {
+              "name": "messages",
+              "value": "={{ JSON.stringify([\n  {\n    role: 'system',\n    content: `You are a friendly hair salon booking assistant on Instagram. Your goal is to:\n1. Greet clients warmly\n2. Determine if they want to book a haircut\n3. Collect: name, email, and phone number\n4. Ask for their preferred appointment date and time\n5. Confirm bookings clearly\n6. Handle rebooking and cancellations politely\n\nBusiness hours: Monday-Saturday, 9 AM - 6 PM\nEach appointment slot is 1 hour\n\nIMPORTANT RULES:\n- Keep responses SHORT (1-3 sentences max) - this is Instagram DM\n- Be conversational and friendly, use emojis sparingly\n- Ask for ONE piece of information at a time\n- If user provides date/time, extract it in ISO format\n- Always confirm before booking\n\nCurrent stage: ${$json.stage}\nClient data: ${JSON.stringify($json.clientData)}\n\nRESPONSE FORMAT:\nProvide a natural response, then on a new line add a JSON block:\n---JSON---\n{\n  \"intent\": \"booking/inquiry/cancel\",\n  \"extracted_data\": {\n    \"name\": \"value or null\",\n    \"email\": \"value or null\",\n    \"phone\": \"value or null\",\n    \"date\": \"YYYY-MM-DD or null\",\n    \"time\": \"HH:MM or null\"\n  },\n  \"next_action\": \"ask_name/ask_email/ask_phone/ask_datetime/check_availability/confirm_booking\"\n}\n---JSON---`\n  },\n  ...$json.conversationHistory\n]) }}"
+            },
+            {
+              "name": "stream",
+              "value": "false"
+            },
+            {
+              "name": "options",
+              "value": "={{ JSON.stringify({\n  temperature: 0.7,\n  top_p: 0.9,\n  num_predict: 200\n}) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "d2bbe0f1-ee35-4857-a65c-aa8714bfbf76",
+      "name": "Ollama Chat1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        816,
+        2128
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "id": "846a1737-7a68-43f2-bad0-2650a7e5630a",
+      "name": "Parse Ollama Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        2128
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ text: $json.userMessage }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "255e7666-5917-4d62-9e98-a3f6748e477e",
+      "name": "Send Instagram Message1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1232,
+        2128
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.nextAction }}",
+              "value2": "check_availability"
+            }
+          ]
+        }
+      },
+      "id": "48d298eb-675b-463d-ac69-82c38925f713",
+      "name": "Ready for Booking?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        2128
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client_ID": "={{ $json.senderId }}",
+            "Name": "={{ $json.extractedData.extracted_data?.name }}",
+            "Email": "={{ $json.extractedData.extracted_data?.email }}",
+            "Phone": "={{ $json.extractedData.extracted_data?.phone }}",
+            "Status": "pending_booking",
+            "Stage": "check_availability",
+            "Conversation_History": "={{ JSON.stringify($json.conversationHistory) }}",
+            "Created_At": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "0be59587-3c17-4d3f-a1eb-09d878436c23",
+      "name": "Update Client Data1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1424,
+        1920
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "id": "46a24830-7e53-413d-acfb-3787158ada58",
+      "name": "Prepare Calendar Check1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        2272
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "options": {
+          "timeMin": "={{ $json.startDateTime }}",
+          "timeMax": "={{ $json.endDateTime }}"
+        }
+      },
+      "id": "51759540-7278-46dd-8e2e-3444c06bc29a",
+      "name": "Check Calendar Availability1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        2272
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}"
+            }
+          ]
+        }
+      },
+      "id": "4b0a4a7f-03f5-4b11-b62a-a5c450bdd287",
+      "name": "Slot Available?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2032,
+        2272
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "start": "={{ $('Prepare Calendar Check1').item.json.startDateTime }}",
+        "end": "={{ $('Prepare Calendar Check1').item.json.endDateTime }}",
+        "additionalFields": {}
+      },
+      "id": "80a2aa48-0ee1-401c-b390-9a020eca059f",
+      "name": "Create Calendar Event1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        2176
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Bookings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Booking_ID": "={{ $json.id }}",
+            "Client_ID": "={{ $('Parse Ollama Response1').item.json.senderId }}",
+            "Name": "={{ $('Parse Ollama Response1').item.json.extractedData.extracted_data.name }}",
+            "Email": "={{ $('Parse Ollama Response1').item.json.extractedData.extracted_data.email }}",
+            "Phone": "={{ $('Parse Ollama Response1').item.json.extractedData.extracted_data.phone }}",
+            "Service": "Haircut",
+            "Appointment_Date": "={{ $('Prepare Calendar Check1').item.json.dateFormatted }}",
+            "Appointment_Time": "={{ $('Prepare Calendar Check1').item.json.timeFormatted }}",
+            "Calendar_Event_ID": "={{ $json.id }}",
+            "Status": "confirmed",
+            "Created_At": "={{ $now.toISO() }}",
+            "Reminder_Sent": "false"
+          }
+        },
+        "options": {}
+      },
+      "id": "f334c45d-e6b8-4360-99f3-73aa724125e5",
+      "name": "Save Booking to Sheet1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2432,
+        2176
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $('Parse Ollama Response1').item.json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ \n  text: `✅ Perfect! Your haircut is booked for ${$('Prepare Calendar Check1').item.json.dateFormatted} at ${$('Prepare Calendar Check1').item.json.timeFormatted}. See you then! 💇‍♀️` \n}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "920ad355-b401-42e7-8a7e-50dc3ead6322",
+      "name": "Send Booking Confirmation1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2624,
+        2176
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3:8b"
+            },
+            {
+              "name": "messages",
+              "value": "={{ JSON.stringify([\n  {\n    role: 'system',\n    content: 'You are a helpful hair salon assistant. The requested time slot is not available. Suggest 3 alternative times within the next 3 days during business hours (Mon-Sat, 9 AM - 6 PM). Be friendly and apologetic.'\n  },\n  {\n    role: 'user',\n    content: `I wanted to book for ${$('Prepare Calendar Check1').item.json.dateFormatted} at ${$('Prepare Calendar Check1').item.json.timeFormatted} but it's not available. What other times do you have?`\n  }\n]) }}"
+            },
+            {
+              "name": "stream",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "98ff76db-1587-47b8-a65d-0602bff84e51",
+      "name": "Suggest Alternative Times1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2224,
+        2368
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ JSON.stringify({ id: $('Parse Ollama Response1').item.json.senderId }) }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({ text: $json.message.content }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3221ca17-1e15-4f80-b459-6c9b6ba38856",
+      "name": "Send Alternative Times1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2432,
+        2368
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -992,
+        704
+      ],
+      "id": "8f5eb287-8011-44f5-ae29-78c74f2625d6",
+      "name": "When chat message received",
+      "webhookId": "2b76f8f0-523a-4f10-ab9c-47fbad04e95c",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1520,
+        1472
+      ],
+      "id": "a1691ef0-6020-44da-9dc0-cd547fa9bc0d",
+      "name": "Google Calendar -",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "options": {
+          "timezone": "UTC+1"
+        }
+      },
+      "id": "8df7334d-38d5-4255-8462-efce92311291",
+      "name": "Date & Time",
+      "type": "n8n-nodes-base.dateTimeTool",
+      "position": [
+        48,
+        1376
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"message\":\"Hi welcome\",\n  \"name\": \"Sasha\",\n  \"email\": \"name@gmail.com\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1344,
+        1584
+      ],
+      "id": "5ceac4cc-2fa2-4307-834f-12472214d641",
+      "name": "Structured Output Parser3",
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        864
+      ],
+      "id": "b146e7ac-d5d4-44a2-aadf-2950a38c9fc9",
+      "name": "When clicking ‘Execute workflow’",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        256
+      ],
+      "id": "628f3b51-139c-4142-b628-b718b19119f4",
+      "name": "Edit Fields",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        128,
+        992
+      ],
+      "id": "38a8e335-28e9-4525-820c-b699cce81d90",
+      "name": "Auto-fixing Output Parser"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -416,
+        752
+      ],
+      "id": "8e3388e7-7c6f-444d-8348-98b8f4408771",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "wV3TiNQpv7h6N71a",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        112,
+        1248
+      ],
+      "id": "618613d6-9539-4636-8497-49b6cf754567",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "wV3TiNQpv7h6N71a",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.entry[0].messaging[0].message.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Instagram Haircut Booking Agent\n\nvery polite grettings, then offer haircut service, if we say yes , then go to the following:\n# Tools\nSeveral Google Sheet tools:\n- \"GSheets - Add Raw\": allows you to add new rows and all data that you get to a Google Sheet\n- \"GSheets - Check ID client\" : check the user id if it exist in sheets\nask from the client his Name first, wait till client gives you an answer\nask from the client his email , wait till client gives you an answer\n1) A Google Calendar tool that allows you to create, reschedule, and delete events in the calendar.\nOnce the user’s contact information and discussion topic have been collected, you must offer 5 available time slots for booking.\n\n- Use the assistant’s local time zone (German time) to determine availability.\n\n- The available office hours are:\n  - Monday to Friday\n  - Morning block: 09:00–12:00\n  - Afternoon block: 13:00–17:00\n  - (Never offer times between 12:00 and 13:00)\n\n- Do not offer any time slots that fall outside of these hours in German time, even if they appear to be valid in the user’s local time zone.\n\n- When a user requests a time range (e.g., \"afternoon\"), follow this logic:\n  1. Understand the time range based on the user’s time zone.\n  2. Convert that time range into German time.\n  3. Only offer time slots that match both the user’s intent and fall within the German office hours.\n\n- You must check that a full 60-minute block is available:\n  - The start and end time must not conflict with any existing calendar event.\n  - The time slot must begin at least 24 hours in the future.\n\n- Always offer the next 5 available 60-minute time slots that meet the above criteria.\n\n\nget all the output and give it to me in the required format:\nThe current time and date is the following Polish Time Zone: {{ $now }}.\nConvert \"preferred_date\" and \"preferred_time\" from the client to format that google calendar can you for start time. output it as \"calendardatetime_start\" and add duration of serverse which is 1 hour and output it as \"calendardatetime_end\" . it should not be later than 2025 year. \n\nMake and title of the event for booking and output it as \"title\". Insert the \"name\" after the service. \n#Example for title\n\"Haircut for Nikita\"\n\nYou must always collect the contact information in the following strict order:\n\n- First: Email address\n\n- Then: Full name\n- Then: Phone number\nthen ask what data\nthen ask what time is fine? give five avviable slots from calendar\n\n\n❗ Only ask for one piece of information at a time.\n❗ Wait for the user’s reply before asking the next question.\n\noutput the status of booking stage to \"status\" - you can only use three options - \nPending\nConfirmed\nCanseled\n\n\n### Example Output\nUser: \"Hi, I want to book a haircut\"\nAssistant:\n{\n  \"message\": \"Hey! 👋 I'd be happy to help you book a haircut. What's your name?\",\n  \"name\": \"Nikita\",\n  \"email\": \"dfd@gmail.com\"\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -32,
+        512
+      ],
+      "id": "a81299fa-975a-482d-9d4a-f4072cbef7fe",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1AxzEJb9Lg2sEUMzwCFW1sfui4SRSsclQulbzIuvhFuY/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Client_ID",
+              "displayName": "Client_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created_At",
+              "displayName": "Created_At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        32,
+        1040
+      ],
+      "id": "21682508-8a29-4ff5-afe8-3ec2f6ad2164",
+      "name": "Append row in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Client_ID",
+              "lookupValue": "={{ $json.senderId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "33ebe9ea-9d22-4c85-a022-cc729ec35da6",
+      "name": "Check Existing Client2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1408,
+        1520
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1AxzEJb9Lg2sEUMzwCFW1sfui4SRSsclQulbzIuvhFuY/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Client_ID",
+              "lookupValue": "={{ $('Webhook').item.json.body.entry[0].messaging[0].sender.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -272,
+        928
+      ],
+      "id": "7e780352-603f-456c-9c6e-94d8d4663849",
+      "name": "GSheets - Check ID client",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1AxzEJb9Lg2sEUMzwCFW1sfui4SRSsclQulbzIuvhFuY/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client_ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Client_ID', ``, 'string') }}",
+            "Name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Name', ``, 'string') }}",
+            "Email": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Email', ``, 'string') }}",
+            "Phone": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Phone', ``, 'string') }}",
+            "Status": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Status', ``, 'string') }}",
+            "Created_At": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Created_At', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Client_ID",
+              "displayName": "Client_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created_At",
+              "displayName": "Created_At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -96,
+        928
+      ],
+      "id": "4c15652c-73c3-4801-94ce-de6d67f6b137",
+      "name": "GSheets - Add Raw",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7bLGORxPO1PzJKCx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "9dd9d5344f8b0f369b530d22d42923575fa35928c6e2a2091fc0e240baf8584a@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "BarbershopBooking"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        64,
+        864
+      ],
+      "id": "91bef6ed-1a52-43f3-aace-9b4be1102c23",
+      "name": "Calendar Read",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6dNoQOGrRdkDm0JK",
+          "name": "Google Calendar account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Client": {
+      "main": [
+        []
+      ]
+    },
+    "Ready for Booking?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Calendar Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Calendar Check": {
+      "main": [
+        []
+      ]
+    },
+    "Check Calendar Availability": {
+      "main": [
+        []
+      ]
+    },
+    "Slot Available?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Suggest Alternative Times",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        []
+      ]
+    },
+    "Save Booking to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram DM1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suggest Alternative Times": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram DM2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Instagram DM": {
+      "main": [
+        []
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event in Google Calendar": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        []
+      ]
+    },
+    "Create an event in Google Calendar1": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Webhook": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Message Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message Data1": {
+      "main": [
+        []
+      ]
+    },
+    "Check Existing Client1": {
+      "main": [
+        []
+      ]
+    },
+    "Client Exists?1": {
+      "main": [
+        [
+          {
+            "node": "Load Conversation Context1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Initialize New Client1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Conversation Context1": {
+      "main": [
+        [
+          {
+            "node": "Ollama Chat1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize New Client1": {
+      "main": [
+        [
+          {
+            "node": "Ollama Chat1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat1": {
+      "main": [
+        [
+          {
+            "node": "Parse Ollama Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Ollama Response1": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram Message1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Client Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Instagram Message1": {
+      "main": [
+        [
+          {
+            "node": "Ready for Booking?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready for Booking?1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Calendar Check1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Calendar Check1": {
+      "main": [
+        [
+          {
+            "node": "Check Calendar Availability1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Calendar Availability1": {
+      "main": [
+        [
+          {
+            "node": "Slot Available?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Available?1": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Suggest Alternative Times1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event1": {
+      "main": [
+        [
+          {
+            "node": "Save Booking to Sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Booking to Sheet1": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Confirmation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suggest Alternative Times1": {
+      "main": [
+        [
+          {
+            "node": "Send Alternative Times1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        []
+      ]
+    },
+    "Google Calendar -": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Date & Time": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Structured Output Parser3": {
+      "ai_outputParser": [
+        []
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "Auto-fixing Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Instagram DM",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Append row in sheet in Google Sheets": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "GSheets - Check ID client": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSheets - Add Raw": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Calendar Read": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3b7c7a84-8c7d-4b35-8c3e-f19eeb998053",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "id": "EkldIpvKvjJHe4Au",
+  "tags": []
+}
