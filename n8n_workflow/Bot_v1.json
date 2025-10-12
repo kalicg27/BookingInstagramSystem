@@ -1,373 +1,386 @@
 {
-  "workflow_name": "Instagram Barbershop Booking Bot",
-  "description": "Automated appointment booking system via Instagram DM",
-  
-  "required_integrations": {
-    "instagram": "Instagram API (Meta Business Suite)",
-    "google_sheets": "Google Sheets API",
-    "google_calendar": "Google Calendar API",
-    "email": "SMTP/Gmail",
-    "storage": "n8n workflow storage for conversation state"
-  },
-
-  "workflows": {
-    
-    "main_workflow": {
-      "trigger": "Instagram Webhook - New DM",
-      "nodes": [
-        {
-          "id": 1,
-          "name": "Webhook Trigger",
-          "type": "Instagram Webhook",
-          "description": "Receives incoming Instagram DMs",
-          "output": ["message_text", "sender_id", "timestamp"]
-        },
-        {
-          "id": 2,
-          "name": "Get Conversation State",
-          "type": "n8n Function/Database",
-          "description": "Check if user has an ongoing conversation",
-          "logic": "Retrieve conversation_state by sender_id"
-        },
-        {
-          "id": 3,
-          "name": "Route by State",
-          "type": "Switch",
-          "conditions": [
-            {"case": "new_conversation", "route_to": 4},
-            {"case": "awaiting_name", "route_to": 10},
-            {"case": "awaiting_email", "route_to": 11},
-            {"case": "awaiting_phone", "route_to": 12},
-            {"case": "awaiting_date", "route_to": 13},
-            {"case": "awaiting_slot", "route_to": 15},
-            {"case": "awaiting_confirmation", "route_to": 17}
-          ]
-        },
-        {
-          "id": 4,
-          "name": "Send Initial Message",
-          "type": "Instagram Send Message",
-          "message": "Hi! Would you like to book a haircut or have a chat?",
-          "buttons": [
-            {"id": "btn_booking", "text": "Booking Haircut"},
-            {"id": "btn_chat", "text": "Chat"}
-          ]
-        },
-        {
-          "id": 5,
-          "name": "Wait for Button Click",
-          "type": "Wait",
-          "trigger": "Instagram Button Response"
-        },
-        {
-          "id": 6,
-          "name": "Route Button Response",
-          "type": "Switch",
-          "conditions": [
-            {"case": "btn_booking", "route_to": 7},
-            {"case": "btn_chat", "route_to": 8}
-          ]
-        },
-        {
-          "id": 7,
-          "name": "Start Booking Flow",
-          "type": "Function",
-          "action": "Set conversation_state = 'awaiting_name'",
-          "then": "Ask for Name"
-        },
-        {
-          "id": 8,
-          "name": "Chat Mode",
-          "type": "Instagram Send Message",
-          "message": "Sure! How can I help you today?",
-          "note": "This can connect to AI chatbot or human handoff"
-        },
-        {
-          "id": 10,
-          "name": "Process Name",
-          "type": "Function",
-          "logic": "Store user_name = message_text",
-          "action": "Set conversation_state = 'awaiting_email'",
-          "next": "Ask for Email"
-        },
-        {
-          "id": 11,
-          "name": "Process Email",
-          "type": "Function",
-          "logic": [
-            "Validate email format",
-            "Store user_email = message_text",
-            "Check Google Sheets if email exists"
-          ],
-          "next": 12
-        },
-        {
-          "id": "11a",
-          "name": "Check Email in Sheets",
-          "type": "Google Sheets Lookup",
-          "action": "Search for email in column B",
-          "if_found": "Skip to next step",
-          "if_not_found": "Insert new row with [name, email, phone]"
-        },
-        {
-          "id": 12,
-          "name": "Process Phone",
-          "type": "Function",
-          "logic": "Store user_phone = message_text",
-          "action": "Set conversation_state = 'awaiting_date'",
-          "next": "Ask for Date"
-        },
-        {
-          "id": 13,
-          "name": "Process Date",
-          "type": "Function",
-          "validation": [
-            "Check if message is empty",
-            "Parse date format",
-            "Validate date is in future"
-          ],
-          "if_empty": "Send error and ask again",
-          "if_valid": "Continue to availability check"
-        },
-        {
-          "id": 14,
-          "name": "Check Calendar Availability",
-          "type": "Google Calendar",
-          "action": "Query events for user_date",
-          "logic": [
-            "Get all booked slots for the day",
-            "Calculate available 1-hour slots",
-            "Consider business hours: 09:00-20:00"
-          ],
-          "output": "available_slots[]"
-        },
-        {
-          "id": "14a",
-          "name": "Day Full Check",
-          "type": "IF",
-          "condition": "available_slots.length === 0",
-          "if_true": "Send 'Day fully booked' message and ask for new date",
-          "if_false": "Show available slots"
-        },
-        {
-          "id": 15,
-          "name": "Display Time Slots",
-          "type": "Instagram Send Message",
-          "message": "Available time slots:",
-          "buttons": [
-            {"id": "slot_1", "text": "09:00 - 10:00"},
-            {"id": "slot_2", "text": "12:00 - 13:00"},
-            {"id": "slot_3", "text": "14:00 - 15:00"},
-            {"id": "slot_4", "text": "16:00 - 17:00"},
-            {"id": "slot_5", "text": "19:00 - 20:00"}
-          ],
-          "note": "Dynamically generate based on available_slots"
-        },
-        {
-          "id": 16,
-          "name": "Book Slot in Calendar",
-          "type": "Google Calendar Create Event",
-          "event_details": {
-            "summary": "Haircut - {{user_name}}",
-            "description": "Phone: {{user_phone}}\nEmail: {{user_email}}",
-            "start": "{{user_date}} {{selected_slot_start}}",
-            "end": "{{user_date}} {{selected_slot_end}}",
-            "status": "tentative"
-          }
-        },
-        {
-          "id": 17,
-          "name": "Send Confirmation Email",
-          "type": "Email Send",
-          "to": "{{user_email}}",
-          "subject": "Confirm Your Haircut Appointment",
-          "body": "Hi {{user_name}},\n\nPlease confirm your appointment:\nDate: {{user_date}}\nTime: {{selected_slot}}\n\nClick here to confirm: [confirmation_link]\n\nThank you!"
-        },
-        {
-          "id": 18,
-          "name": "Wait for Email Confirmation",
-          "type": "Wait",
-          "trigger": "Webhook - Email Confirmation Link Clicked",
-          "timeout": "24 hours"
-        },
-        {
-          "id": 19,
-          "name": "Update Calendar Status",
-          "type": "Google Calendar Update Event",
-          "action": "Change status from 'tentative' to 'confirmed'"
-        },
-        {
-          "id": 20,
-          "name": "Send Final Confirmation",
-          "type": "Instagram Send Message",
-          "message": "Your booking is confirmed! See you soon 👋"
-        },
-        {
-          "id": 21,
-          "name": "Clear Conversation State",
-          "type": "Function",
-          "action": "Delete conversation_state for sender_id"
-        }
-      ]
+  "name": "Instagram Booking Bot - Main Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Instagram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "instagram-dm-webhook"
     },
-
-    "reminder_workflow": {
-      "trigger": "Schedule - Every 30 minutes",
-      "nodes": [
-        {
-          "id": 30,
-          "name": "Cron Trigger",
-          "type": "Schedule",
-          "interval": "*/30 * * * *"
-        },
-        {
-          "id": 31,
-          "name": "Get Upcoming Appointments",
-          "type": "Google Calendar Query",
-          "timeframe": "Next 2 hours",
-          "filter": "status = 'confirmed'"
-        },
-        {
-          "id": 32,
-          "name": "Loop Through Appointments",
-          "type": "Loop",
-          "for_each": "appointment in appointments"
-        },
-        {
-          "id": 33,
-          "name": "Check if Reminder Sent",
-          "type": "Database Query",
-          "check": "reminder_sent_flag for this appointment",
-          "if_true": "Skip",
-          "if_false": "Continue"
-        },
-        {
-          "id": 34,
-          "name": "Get Client Instagram ID",
-          "type": "Google Sheets Lookup",
-          "lookup_by": "email",
-          "retrieve": "instagram_sender_id"
-        },
-        {
-          "id": 35,
-          "name": "Send Reminder",
-          "type": "Instagram Send Message",
-          "message": "Reminder: You have an appointment in {{time_until}} at {{appointment_time}}.\nAddress: {{barbershop_address}}",
-          "buttons": [
-            {"id": "btn_active", "text": "Active"},
-            {"id": "btn_rebook", "text": "Rebook"},
-            {"id": "btn_cancel", "text": "Cancel Appointment"}
-          ]
-        },
-        {
-          "id": 36,
-          "name": "Mark Reminder Sent",
-          "type": "Database Update",
-          "action": "Set reminder_sent = true for this appointment"
-        },
-        {
-          "id": 37,
-          "name": "Wait for Button Response",
-          "type": "Wait",
-          "trigger": "Instagram Button Click"
-        },
-        {
-          "id": 38,
-          "name": "Route Reminder Action",
-          "type": "Switch",
-          "conditions": [
-            {"case": "btn_active", "route_to": 39},
-            {"case": "btn_cancel", "route_to": 40},
-            {"case": "btn_rebook", "route_to": 41}
-          ]
-        },
-        {
-          "id": 39,
-          "name": "Confirm Active",
-          "type": "Instagram Send Message",
-          "message": "Thanks for confirming! See you at the barbershop."
-        },
-        {
-          "id": 40,
-          "name": "Cancel Appointment",
-          "type": "Google Calendar Delete Event",
-          "then": "Send cancellation confirmation message"
-        },
-        {
-          "id": 41,
-          "name": "Start Rebooking",
-          "type": "Function",
-          "actions": [
-            "Delete old calendar event",
-            "Set conversation_state = 'awaiting_date'",
-            "Send 'Please provide a new date' message",
-            "Route back to main workflow date selection"
+    {
+      "parameters": {
+        "jsCode": "// Extract sender ID and message from Instagram webhook\nconst body = $input.item.json.body;\nconst senderId = body.entry?.[0]?.messaging?.[0]?.sender?.id;\nconst messageText = body.entry?.[0]?.messaging?.[0]?.message?.text;\nconst postback = body.entry?.[0]?.messaging?.[0]?.postback?.payload;\n\nreturn {\n  senderId: senderId,\n  messageText: messageText || '',\n  postback: postback || '',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Instagram Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "conversation_{{ $json.senderId }}"
+      },
+      "id": "get-state",
+      "name": "Get Conversation State",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize or parse conversation state\nconst senderId = $input.first().json.senderId;\nconst messageText = $input.first().json.messageText;\nconst postback = $input.first().json.postback;\nconst redisData = $input.first().json.value;\n\nlet state = {\n  stage: 'initial',\n  data: {}\n};\n\nif (redisData) {\n  try {\n    state = JSON.parse(redisData);\n  } catch (e) {\n    state = { stage: 'initial', data: {} };\n  }\n}\n\n// Handle button postbacks\nif (postback) {\n  if (postback === 'btn_booking') {\n    state.stage = 'awaiting_name';\n  } else if (postback === 'btn_chat') {\n    state.stage = 'chat_mode';\n  } else if (postback.startsWith('slot_')) {\n    state.data.selectedSlot = postback;\n    state.stage = 'booking_confirmed';\n  } else if (postback === 'btn_active') {\n    state.stage = 'reminder_confirmed';\n  } else if (postback === 'btn_cancel') {\n    state.stage = 'cancel_appointment';\n  } else if (postback === 'btn_rebook') {\n    state.stage = 'awaiting_date';\n  }\n}\n\nreturn {\n  senderId: senderId,\n  messageText: messageText,\n  postback: postback,\n  currentStage: state.stage,\n  userData: state.data,\n  fullState: state\n};"
+      },
+      "id": "process-state",
+      "name": "Process State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "initial"
+            }
           ]
         }
-      ]
-    }
-  },
-
-  "data_storage": {
-    "google_sheets_structure": {
-      "sheet_name": "Clients",
-      "columns": [
-        "Name",
-        "Email",
-        "Phone",
-        "Instagram_ID",
-        "Last_Appointment",
-        "Total_Visits"
-      ]
+      },
+      "id": "route-initial",
+      "name": "Is Initial?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
     },
-    "conversation_state_storage": {
-      "type": "n8n Internal Storage or Redis",
-      "structure": {
-        "sender_id": "string",
-        "state": "enum [new, awaiting_name, awaiting_email, etc.]",
-        "collected_data": {
-          "name": "string",
-          "email": "string",
-          "phone": "string",
-          "date": "date",
-          "slot": "string"
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.instagramAccessToken }}"
+            }
+          ]
         },
-        "timestamp": "datetime"
-      }
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={\"id\": \"{{ $json.senderId }}\"}"
+            },
+            {
+              "name": "message",
+              "value": "={\"text\": \"Hi! Would you like to book a haircut or have a chat?\", \"quick_replies\": [{\"content_type\": \"text\", \"title\": \"Book Haircut\", \"payload\": \"btn_booking\"}, {\"content_type\": \"text\", \"title\": \"Chat\", \"payload\": \"btn_chat\"}]}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-initial",
+      "name": "Send Initial Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_name"
+            }
+          ]
+        }
+      },
+      "id": "route-name",
+      "name": "Is Awaiting Name?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// If initial stage, ask for name\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\n\n// Store the message text as name\nconst messageText = $input.first().json.messageText;\n\nif (!messageText) {\n  return {\n    senderId: senderId,\n    message: \"Please provide your name:\",\n    stage: 'awaiting_name',\n    userData: userData\n  };\n}\n\nuserData.name = messageText;\n\nreturn {\n  senderId: senderId,\n  message: \"Please provide your email address:\",\n  stage: 'awaiting_email',\n  userData: userData\n};"
+      },
+      "id": "process-name",
+      "name": "Process Name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_email"
+            }
+          ]
+        }
+      },
+      "id": "route-email",
+      "name": "Is Awaiting Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process email and validate\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\n// Simple email validation\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nif (!emailRegex.test(messageText)) {\n  return {\n    senderId: senderId,\n    message: \"Please provide a valid email address:\",\n    stage: 'awaiting_email',\n    userData: userData,\n    valid: false\n  };\n}\n\nuserData.email = messageText;\n\nreturn {\n  senderId: senderId,\n  message: \"Please provide your phone number:\",\n  stage: 'awaiting_phone',\n  userData: userData,\n  valid: true\n};"
+      },
+      "id": "process-email",
+      "name": "Process Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_phone"
+            }
+          ]
+        }
+      },
+      "id": "route-phone",
+      "name": "Is Awaiting Phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process phone\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nuserData.phone = messageText;\n\nreturn {\n  senderId: senderId,\n  message: \"What day would you like to book your haircut? (Please use format: YYYY-MM-DD)\",\n  stage: 'awaiting_date',\n  userData: userData\n};"
+      },
+      "id": "process-phone",
+      "name": "Process Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_date"
+            }
+          ]
+        }
+      },
+      "id": "route-date",
+      "name": "Is Awaiting Date?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 1100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and validate date\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nif (!messageText) {\n  return {\n    senderId: senderId,\n    message: \"We can't make an appointment without a date. Please provide a date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\n// Validate date format\nconst dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\nif (!dateRegex.test(messageText)) {\n  return {\n    senderId: senderId,\n    message: \"Please use the format YYYY-MM-DD (e.g., 2024-12-25):\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\nconst selectedDate = new Date(messageText);\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nif (selectedDate < today) {\n  return {\n    senderId: senderId,\n    message: \"Please select a future date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\nuserData.date = messageText;\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  date: messageText,\n  stage: 'checking_availability',\n  valid: true\n};"
+      },
+      "id": "process-date",
+      "name": "Process Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 1100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ $credentials.googleCalendarId }}/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeMin",
+              "value": "={{ $json.date }}T00:00:00Z"
+            },
+            {
+              "name": "timeMax",
+              "value": "={{ $json.date }}T23:59:59Z"
+            },
+            {
+              "name": "singleEvents",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-calendar",
+      "name": "Check Calendar Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1450, 1100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate available slots\nconst events = $input.first().json.items || [];\nconst userData = $input.first().json.userData;\nconst senderId = $input.first().json.senderId;\n\n// Business hours: 9-20 (9 AM to 8 PM)\nconst businessHours = [\n  { start: '09:00', end: '10:00', id: 'slot_1' },\n  { start: '12:00', end: '13:00', id: 'slot_2' },\n  { start: '14:00', end: '15:00', id: 'slot_3' },\n  { start: '16:00', end: '17:00', id: 'slot_4' },\n  { start: '19:00', end: '20:00', id: 'slot_5' }\n];\n\n// Get booked slots\nconst bookedSlots = events.map(event => {\n  const start = new Date(event.start.dateTime || event.start.date);\n  return start.getHours() + ':' + String(start.getMinutes()).padStart(2, '0');\n});\n\n// Filter available slots\nconst availableSlots = businessHours.filter(slot => {\n  return !bookedSlots.includes(slot.start);\n});\n\nif (availableSlots.length === 0) {\n  return {\n    senderId: senderId,\n    message: \"Sorry, this day is fully booked. Please choose another date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    dayFull: true\n  };\n}\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  availableSlots: availableSlots,\n  stage: 'showing_slots',\n  dayFull: false\n};"
+      },
+      "id": "calculate-slots",
+      "name": "Calculate Available Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 1100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.instagramAccessToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.senderId }}\"},\n  \"message\": {\n    \"text\": \"{{ $json.message }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-message",
+      "name": "Send Message to Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1850, 500]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=conversation_{{ $json.senderId }}",
+        "value": "={{ JSON.stringify({ stage: $json.stage, data: $json.userData }) }}",
+        "ttl": 86400
+      },
+      "id": "save-state",
+      "name": "Save Conversation State",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2050, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\" }",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2250, 500]
     }
-  },
-
-  "error_handling": {
-    "invalid_email": "Send error message and ask again",
-    "invalid_date": "Send format example and ask again",
-    "api_failures": "Log error, notify admin, send user-friendly message",
-    "timeout": "Clear state after 24 hours of inactivity"
-  },
-
-  "implementation_notes": [
-    "Use n8n's 'Wait' node for conversation flows",
-    "Store conversation state in n8n's execution data or external database",
-    "Use Instagram Graph API for DM functionality",
-    "Implement webhook security (verify Instagram signatures)",
-    "Add retry logic for API calls",
-    "Consider rate limits for Instagram messaging",
-    "Test timezone handling for appointments",
-    "Implement duplicate booking prevention",
-    "Add admin notification for booking confirmations",
-    "Consider adding payment integration later"
   ],
-
-  "configuration_variables": {
-    "INSTAGRAM_PAGE_ID": "Your Instagram Business Page ID",
-    "INSTAGRAM_ACCESS_TOKEN": "Facebook/Instagram API Token",
-    "GOOGLE_CALENDAR_ID": "Calendar ID for appointments",
-    "GOOGLE_SHEETS_ID": "Spreadsheet ID for client data",
-    "SMTP_CONFIG": "Email server configuration",
-    "BARBERSHOP_ADDRESS": "Physical address for reminders",
-    "BUSINESS_HOURS": {
-      "start": "09:00",
-      "end": "20:00",
-      "slot_duration": 60
+  "pinData": {},
+  "connections": {
+    "Instagram Webhook": {
+      "main": [[{ "node": "Parse Instagram Data", "type": "main", "index": 0 }]]
+    },
+    "Parse Instagram Data": {
+      "main": [[{ "node": "Get Conversation State", "type": "main", "index": 0 }]]
+    },
+    "Get Conversation State": {
+      "main": [[{ "node": "Process State", "type": "main", "index": 0 }]]
+    },
+    "Process State": {
+      "main": [[{ "node": "Is Initial?", "type": "main", "index": 0 }]]
+    },
+    "Is Initial?": {
+      "main": [
+        [{ "node": "Send Initial Message", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Name?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Initial Message": {
+      "main": [[{ "node": "Save Conversation State", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Name?": {
+      "main": [
+        [{ "node": "Process Name", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Email?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Name": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Email?": {
+      "main": [
+        [{ "node": "Process Email", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Phone?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Email": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Phone?": {
+      "main": [
+        [{ "node": "Process Phone", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Date?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Phone": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Date?": {
+      "main": [[{ "node": "Process Date", "type": "main", "index": 0 }]]
+    },
+    "Process Date": {
+      "main": [[{ "node": "Check Calendar Availability", "type": "main", "index": 0 }]]
+    },
+    "Check Calendar Availability": {
+      "main": [[{ "node": "Calculate Available Slots", "type": "main", "index": 0 }]]
+    },
+    "Calculate Available Slots": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Send Message to Instagram": {
+      "main": [[{ "node": "Save Conversation State", "type": "main", "index": 0 }]]
+    },
+    "Save Conversation State": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
     }
-  }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "1",
+  "meta": {
+    "instanceId": "your-instance-id"
+  },
+  "tags": []
 }
