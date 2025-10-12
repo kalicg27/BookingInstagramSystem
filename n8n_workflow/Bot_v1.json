@@ -1,0 +1,373 @@
+{
+  "workflow_name": "Instagram Barbershop Booking Bot",
+  "description": "Automated appointment booking system via Instagram DM",
+  
+  "required_integrations": {
+    "instagram": "Instagram API (Meta Business Suite)",
+    "google_sheets": "Google Sheets API",
+    "google_calendar": "Google Calendar API",
+    "email": "SMTP/Gmail",
+    "storage": "n8n workflow storage for conversation state"
+  },
+
+  "workflows": {
+    
+    "main_workflow": {
+      "trigger": "Instagram Webhook - New DM",
+      "nodes": [
+        {
+          "id": 1,
+          "name": "Webhook Trigger",
+          "type": "Instagram Webhook",
+          "description": "Receives incoming Instagram DMs",
+          "output": ["message_text", "sender_id", "timestamp"]
+        },
+        {
+          "id": 2,
+          "name": "Get Conversation State",
+          "type": "n8n Function/Database",
+          "description": "Check if user has an ongoing conversation",
+          "logic": "Retrieve conversation_state by sender_id"
+        },
+        {
+          "id": 3,
+          "name": "Route by State",
+          "type": "Switch",
+          "conditions": [
+            {"case": "new_conversation", "route_to": 4},
+            {"case": "awaiting_name", "route_to": 10},
+            {"case": "awaiting_email", "route_to": 11},
+            {"case": "awaiting_phone", "route_to": 12},
+            {"case": "awaiting_date", "route_to": 13},
+            {"case": "awaiting_slot", "route_to": 15},
+            {"case": "awaiting_confirmation", "route_to": 17}
+          ]
+        },
+        {
+          "id": 4,
+          "name": "Send Initial Message",
+          "type": "Instagram Send Message",
+          "message": "Hi! Would you like to book a haircut or have a chat?",
+          "buttons": [
+            {"id": "btn_booking", "text": "Booking Haircut"},
+            {"id": "btn_chat", "text": "Chat"}
+          ]
+        },
+        {
+          "id": 5,
+          "name": "Wait for Button Click",
+          "type": "Wait",
+          "trigger": "Instagram Button Response"
+        },
+        {
+          "id": 6,
+          "name": "Route Button Response",
+          "type": "Switch",
+          "conditions": [
+            {"case": "btn_booking", "route_to": 7},
+            {"case": "btn_chat", "route_to": 8}
+          ]
+        },
+        {
+          "id": 7,
+          "name": "Start Booking Flow",
+          "type": "Function",
+          "action": "Set conversation_state = 'awaiting_name'",
+          "then": "Ask for Name"
+        },
+        {
+          "id": 8,
+          "name": "Chat Mode",
+          "type": "Instagram Send Message",
+          "message": "Sure! How can I help you today?",
+          "note": "This can connect to AI chatbot or human handoff"
+        },
+        {
+          "id": 10,
+          "name": "Process Name",
+          "type": "Function",
+          "logic": "Store user_name = message_text",
+          "action": "Set conversation_state = 'awaiting_email'",
+          "next": "Ask for Email"
+        },
+        {
+          "id": 11,
+          "name": "Process Email",
+          "type": "Function",
+          "logic": [
+            "Validate email format",
+            "Store user_email = message_text",
+            "Check Google Sheets if email exists"
+          ],
+          "next": 12
+        },
+        {
+          "id": "11a",
+          "name": "Check Email in Sheets",
+          "type": "Google Sheets Lookup",
+          "action": "Search for email in column B",
+          "if_found": "Skip to next step",
+          "if_not_found": "Insert new row with [name, email, phone]"
+        },
+        {
+          "id": 12,
+          "name": "Process Phone",
+          "type": "Function",
+          "logic": "Store user_phone = message_text",
+          "action": "Set conversation_state = 'awaiting_date'",
+          "next": "Ask for Date"
+        },
+        {
+          "id": 13,
+          "name": "Process Date",
+          "type": "Function",
+          "validation": [
+            "Check if message is empty",
+            "Parse date format",
+            "Validate date is in future"
+          ],
+          "if_empty": "Send error and ask again",
+          "if_valid": "Continue to availability check"
+        },
+        {
+          "id": 14,
+          "name": "Check Calendar Availability",
+          "type": "Google Calendar",
+          "action": "Query events for user_date",
+          "logic": [
+            "Get all booked slots for the day",
+            "Calculate available 1-hour slots",
+            "Consider business hours: 09:00-20:00"
+          ],
+          "output": "available_slots[]"
+        },
+        {
+          "id": "14a",
+          "name": "Day Full Check",
+          "type": "IF",
+          "condition": "available_slots.length === 0",
+          "if_true": "Send 'Day fully booked' message and ask for new date",
+          "if_false": "Show available slots"
+        },
+        {
+          "id": 15,
+          "name": "Display Time Slots",
+          "type": "Instagram Send Message",
+          "message": "Available time slots:",
+          "buttons": [
+            {"id": "slot_1", "text": "09:00 - 10:00"},
+            {"id": "slot_2", "text": "12:00 - 13:00"},
+            {"id": "slot_3", "text": "14:00 - 15:00"},
+            {"id": "slot_4", "text": "16:00 - 17:00"},
+            {"id": "slot_5", "text": "19:00 - 20:00"}
+          ],
+          "note": "Dynamically generate based on available_slots"
+        },
+        {
+          "id": 16,
+          "name": "Book Slot in Calendar",
+          "type": "Google Calendar Create Event",
+          "event_details": {
+            "summary": "Haircut - {{user_name}}",
+            "description": "Phone: {{user_phone}}\nEmail: {{user_email}}",
+            "start": "{{user_date}} {{selected_slot_start}}",
+            "end": "{{user_date}} {{selected_slot_end}}",
+            "status": "tentative"
+          }
+        },
+        {
+          "id": 17,
+          "name": "Send Confirmation Email",
+          "type": "Email Send",
+          "to": "{{user_email}}",
+          "subject": "Confirm Your Haircut Appointment",
+          "body": "Hi {{user_name}},\n\nPlease confirm your appointment:\nDate: {{user_date}}\nTime: {{selected_slot}}\n\nClick here to confirm: [confirmation_link]\n\nThank you!"
+        },
+        {
+          "id": 18,
+          "name": "Wait for Email Confirmation",
+          "type": "Wait",
+          "trigger": "Webhook - Email Confirmation Link Clicked",
+          "timeout": "24 hours"
+        },
+        {
+          "id": 19,
+          "name": "Update Calendar Status",
+          "type": "Google Calendar Update Event",
+          "action": "Change status from 'tentative' to 'confirmed'"
+        },
+        {
+          "id": 20,
+          "name": "Send Final Confirmation",
+          "type": "Instagram Send Message",
+          "message": "Your booking is confirmed! See you soon 👋"
+        },
+        {
+          "id": 21,
+          "name": "Clear Conversation State",
+          "type": "Function",
+          "action": "Delete conversation_state for sender_id"
+        }
+      ]
+    },
+
+    "reminder_workflow": {
+      "trigger": "Schedule - Every 30 minutes",
+      "nodes": [
+        {
+          "id": 30,
+          "name": "Cron Trigger",
+          "type": "Schedule",
+          "interval": "*/30 * * * *"
+        },
+        {
+          "id": 31,
+          "name": "Get Upcoming Appointments",
+          "type": "Google Calendar Query",
+          "timeframe": "Next 2 hours",
+          "filter": "status = 'confirmed'"
+        },
+        {
+          "id": 32,
+          "name": "Loop Through Appointments",
+          "type": "Loop",
+          "for_each": "appointment in appointments"
+        },
+        {
+          "id": 33,
+          "name": "Check if Reminder Sent",
+          "type": "Database Query",
+          "check": "reminder_sent_flag for this appointment",
+          "if_true": "Skip",
+          "if_false": "Continue"
+        },
+        {
+          "id": 34,
+          "name": "Get Client Instagram ID",
+          "type": "Google Sheets Lookup",
+          "lookup_by": "email",
+          "retrieve": "instagram_sender_id"
+        },
+        {
+          "id": 35,
+          "name": "Send Reminder",
+          "type": "Instagram Send Message",
+          "message": "Reminder: You have an appointment in {{time_until}} at {{appointment_time}}.\nAddress: {{barbershop_address}}",
+          "buttons": [
+            {"id": "btn_active", "text": "Active"},
+            {"id": "btn_rebook", "text": "Rebook"},
+            {"id": "btn_cancel", "text": "Cancel Appointment"}
+          ]
+        },
+        {
+          "id": 36,
+          "name": "Mark Reminder Sent",
+          "type": "Database Update",
+          "action": "Set reminder_sent = true for this appointment"
+        },
+        {
+          "id": 37,
+          "name": "Wait for Button Response",
+          "type": "Wait",
+          "trigger": "Instagram Button Click"
+        },
+        {
+          "id": 38,
+          "name": "Route Reminder Action",
+          "type": "Switch",
+          "conditions": [
+            {"case": "btn_active", "route_to": 39},
+            {"case": "btn_cancel", "route_to": 40},
+            {"case": "btn_rebook", "route_to": 41}
+          ]
+        },
+        {
+          "id": 39,
+          "name": "Confirm Active",
+          "type": "Instagram Send Message",
+          "message": "Thanks for confirming! See you at the barbershop."
+        },
+        {
+          "id": 40,
+          "name": "Cancel Appointment",
+          "type": "Google Calendar Delete Event",
+          "then": "Send cancellation confirmation message"
+        },
+        {
+          "id": 41,
+          "name": "Start Rebooking",
+          "type": "Function",
+          "actions": [
+            "Delete old calendar event",
+            "Set conversation_state = 'awaiting_date'",
+            "Send 'Please provide a new date' message",
+            "Route back to main workflow date selection"
+          ]
+        }
+      ]
+    }
+  },
+
+  "data_storage": {
+    "google_sheets_structure": {
+      "sheet_name": "Clients",
+      "columns": [
+        "Name",
+        "Email",
+        "Phone",
+        "Instagram_ID",
+        "Last_Appointment",
+        "Total_Visits"
+      ]
+    },
+    "conversation_state_storage": {
+      "type": "n8n Internal Storage or Redis",
+      "structure": {
+        "sender_id": "string",
+        "state": "enum [new, awaiting_name, awaiting_email, etc.]",
+        "collected_data": {
+          "name": "string",
+          "email": "string",
+          "phone": "string",
+          "date": "date",
+          "slot": "string"
+        },
+        "timestamp": "datetime"
+      }
+    }
+  },
+
+  "error_handling": {
+    "invalid_email": "Send error message and ask again",
+    "invalid_date": "Send format example and ask again",
+    "api_failures": "Log error, notify admin, send user-friendly message",
+    "timeout": "Clear state after 24 hours of inactivity"
+  },
+
+  "implementation_notes": [
+    "Use n8n's 'Wait' node for conversation flows",
+    "Store conversation state in n8n's execution data or external database",
+    "Use Instagram Graph API for DM functionality",
+    "Implement webhook security (verify Instagram signatures)",
+    "Add retry logic for API calls",
+    "Consider rate limits for Instagram messaging",
+    "Test timezone handling for appointments",
+    "Implement duplicate booking prevention",
+    "Add admin notification for booking confirmations",
+    "Consider adding payment integration later"
+  ],
+
+  "configuration_variables": {
+    "INSTAGRAM_PAGE_ID": "Your Instagram Business Page ID",
+    "INSTAGRAM_ACCESS_TOKEN": "Facebook/Instagram API Token",
+    "GOOGLE_CALENDAR_ID": "Calendar ID for appointments",
+    "GOOGLE_SHEETS_ID": "Spreadsheet ID for client data",
+    "SMTP_CONFIG": "Email server configuration",
+    "BARBERSHOP_ADDRESS": "Physical address for reminders",
+    "BUSINESS_HOURS": {
+      "start": "09:00",
+      "end": "20:00",
+      "slot_duration": 60
+    }
+  }
+}
