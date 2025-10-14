@@ -1,0 +1,112 @@
+Title:
+Environment: PC, Windowns 10, build 3.94
+Steps to reproduce:
+1. 
+2. 
+Expected results:
+
+Actual results:
+
+Severity: 
+
+part 1- 
+
+task1
+
+Title:Player dissapers after using fast-travel feature
+Environment: PC, Windowns 10, build 3.94
+Steps to reproduce:
+1. Launch the game and open the level "Adventure Bridge"
+2. Move forward and hold on press of keyboard "C" to activate "fast-Travel" feature
+Expected results:
+Player start smoothly traveling faster with camera properly following in third-person, sound of movement is on, 
+after deactivating by not pressing keyboard "C" player should get back to normal stage of traveling smoothly
+Actual results:
+Player dissapers from the screen, while the camera stays on position and sounds of movement is on
+Severity: Major
+
+task 2:
+Title: Not working the "Restart Race" function via button
+Environment: PC, Windowns 10, build 3.94
+Steps to reproduce:
+1. Launch the game and open the level "Tokio Race"
+2. Start gameplay, wait 10 seconds while playing
+3. On the top courner left screen press button "Restart Race"
+4. Wait 5 seconds
+Expected results:
+Player should be asked as popup menu to confirm the restart the race, should be able to restart the race after pressing the confirm. 
+gameplay should reload form first stage of the level and has abbility to proccedd to play smoothly
+Actual results:
+Player does not have any actions after pressing the button "Restart Race" . Functions does not work or not active
+Severity: Major
+
+part 2
+
+task 3:
+TO test dialogue subtitle system i would test language, grammar, timing of occuring the subtitle and edge cases
+
+1. Visual and UI 
+	font, the placement 
+2. Language 
+3. Content based on situation
+
+task 4:
+
+TO test achievement or trophy system i would test Visuel, UI, Save and load data, sorting,filtering and  edge cases
+
+1. Save and Load of achievement
+2. Filtering and sorting data
+3. tracking the achivement
+4. tracking sub tasks to achieve the main trophy
+5. Visuel and UI
+	Confirm that all buttons, labels and icons are alignes, visible and display correctly
+	Check for language, font, or scalling issues
+6. Edge Cases
+	press multiple buttons quickly or use a controller during transitions.
+	verify that no crashes or frozen states occur.
+	
+
+part 3
+
+task 5: Testign previously fixed issues, to ensure they won't occur on the next build
+task 6: Severity explains the type of bag is, Priority - tells us how fast it should be fixed
+task 7: How the testing of a bug should be taken, called mostly as testing plan
+task 8: Quick test to confirm the build runs without immediate crashes
+task 9: To save a time and be punctial for developers
+
+part4 
+
+task 10:
+
+Title: Game is freezing while opening inventory 
+Environement: Xbox, build 1.3.7
+Steps to reproduce:
+1. Launch the game and go to the village map
+2. Press “I” key to open the inventory
+3. Wait 10 seconds
+Expected Result: Inventory should open and close normaly and allow the player to manage items smoothly
+Actual Result: Game freez for few seconds then unfreez again without inventary opening to the player
+Severity: Minor
+
+
+task 11:
+severity: Major. the game is not crushing so we could not label is as criticial. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

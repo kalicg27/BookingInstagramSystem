@@ -1,0 +1,124 @@
+Title:
+Environment:
+Steps to reproduce:
+Expected results:
+Actual results:
+Severity:
+
+Severity levels
+Critical - game crashes and progress blocked
+Major - Improtant features broken (movement,combat)
+Minor - Visuall or small gameplay issue
+Trivial - Cosmetic , typo
+
+
+
+Title: Player clips through wall when jumping near edges
+Environment: PC, Windows 10, build 1.02
+Steps to reproduce:
+1. Launch the game and load Level 3
+2. Move close to any corner wall.
+3. Jump multiple times near the edge.
+Expected results: Player should collide with the wall and land normally.
+Actual results: Player model passes through the wall and falls out of bounds. 
+Severity: Major
+
+
+Title: Car float above the road surface when driving downhill.
+Environment: PS5, build 0.9.4
+Steps to reproduce:
+1. Start the race on the "Mountain Pass" track.
+2. Drive downhill after the third checkpoint.
+Expected result: Car reminds in contact with the road surface
+Actual result: Car floats above the road for 2-3 seconds.
+Severity: Minor
+
+
+Title: Jump movement bug while puasing and resuming game 
+Environment:PC, windwonws 10, build 1.05
+Steps to reproduce:
+1. Launch the game and load level 5
+2. Move forward and jump 
+3. when the payer is mid-air press Pause the game
+
+Expected results: Smooth finish of the player's jump after the game resumed. player should land on the surface
+Actual results: Player float in the air , when you move it moves forward. Player doen's not land on the surface
+Severity: Major
+
+Title: Not occuring immediate changes after changing the resulition format without restarting the game
+Environment:PC, Windows 10, build 3.03.1
+Steps to reproduce:
+1. Launch the game and go to game settings menu on the corner left
+2. Move to Visual settings press game resolution
+3. Change from 1920x1080 to 2560x1440 
+Expected result: The resolutino should update immediately. and the player should return smoothly to the game without needing ot restart.
+After changing the resulition player should be able to get decired resulition without restarting the game. it shoudl be able to get back to game immediatetly smoothly
+Actual result: After changing the resulition the black screen occurs and blocks to procceed any actions. Only way is restarting game manually
+Severity: Major
+
+
+
+To test main menu of a game i would check the main functions, visual and edge cases:
+
+1. Opening and closing menu while real time playing
+2. Opening all sub tabs from menu such settings,
+3. Test pause and resume functions
+4. Test leaving the game or quit function
+5. Test all setting changes while game is running
+6. If it has volume and brightness setting in menu test them
+7. Test save progress and load game after a restart
+
+
+1. Opening and closing
+	Open and close the main menu druing active gameplay to ensure it responds correctly
+	check that the game pauses (if applicable) and resumes gameplay
+2. Navigatin
+	Access all the submenus such as Settings, Load Game and Credits.
+	Verify that each button and navigation link works correctly
+3. Functional options
+	Test the Resume, New Game, Load Game, and Quit Game options
+	Ensure that each actions performs as expected and returns the player to the correct state
+4. Settings
+	Change the graphics, Audio and brightness settings while in the menu
+	Confirm the changes apply immediately or after confirmation as designed
+5. Save and load
+	Save progress, exit the game and reload to verify that correct data is restored
+6. Visual and UI checks:
+	Confirm that all buttons, labels and icons are alignes, visible and display correctly
+	Check for language, font, or scalling issues
+7. Edge cases:
+	press multiple buttons quickly or use a controller during transitions.
+	verify that no crashes or frozen states occur.
+
+answers to part 3
+
+1. Testing previously fixed issues to ensure they don't reappear in the new build
+2. Critical - game crashes or block progress , and Major bug are blocking main features such as movement, combat
+3. Written test scenario describing what to test and expected results
+4. To ensure developer of what should happen and what is really happening 
+5. smoke test is quick test to confirm the build runs wihtout immediate crashes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
