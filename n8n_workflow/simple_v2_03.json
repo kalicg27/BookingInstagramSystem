@@ -1,0 +1,81 @@
+{
+  "name": "IG Barbershop Booking",
+  "nodes": [
+    {
+      "parameters": {"path": "ig/inbound","responseMode": "onReceived"},
+      "id": "Webhook_IG_Inbound",
+      "name": "Webhook - IG_Inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200,200]
+    },
+    {
+      "parameters": {"functionCode": "/* Parse IG message or postback */\nconst entry = $json.entry?.[0]?.messaging?.[0] || {};\nconst igUserId = entry.sender?.id;\nconst text = entry.message?.text || '';\nconst payload = entry.postback?.payload || '';\nreturn [{ igUserId, text, payload }];"},
+      "id": "Function_ParseIG",
+      "name": "Function - ParseIG",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [420,200]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {"value1": "={{$json.payload || $json.text}}","operation": "contains","value2": "BOOK"},
+            {"value1": "={{$json.payload || $json.text}}","operation": "contains","value2": "CHAT"}
+          ]
+        }
+      },
+      "id": "Switch_RouteIntent",
+      "name": "Switch - RouteIntent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [640,200]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "requestMethod": "POST",
+        "url": "={{`https://graph.facebook.com/v19.0/${$env.META_IG_USER_ID}/messages`}}",
+        "jsonParameters": true,
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersJson": "{\"Authorization\":\"Bearer {{$env.META_ACCESS_TOKEN}}\"}",
+        "bodyParametersJson": "={\"recipient\":{\"id\":\"{{$json.igUserId}}\"},\"messaging_type\":\"RESPONSE\",\"message\":{\"text\":\"Hi! Would you like to book a haircut or have a chat?\",\"quick_replies\":[{\"content_type\":\"text\",\"title\":\"Booking Haircut\",\"payload\":\"BOOK\"},{\"content_type\":\"text\",\"title\":\"Chat\",\"payload\":\"CHAT\"}]}}"
+      },
+      "id": "HTTP_Send_Welcome",
+      "name": "HTTP - SendDM Welcome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [860,120]
+    },
+    {
+      "parameters": {"path": "email","responseMode": "onReceived"},
+      "id": "Webhook_Email_Action",
+      "name": "Webhook - Email_Action",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200,560]
+    },
+    {
+      "parameters": {"mode": "everyX","interval": 15},
+      "id": "Cron_Reminders",
+      "name": "Cron - Reminders",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [200,900]
+    }
+  ],
+  "connections": {
+    "Webhook - IG_Inbound": {"main": [[{"node": "Function - ParseIG","type": "main","index": 0}]]},
+    "Function - ParseIG": {"main": [[{"node": "Switch - RouteIntent","type": "main","index": 0}]]},
+    "Switch - RouteIntent": {
+      "main": [
+        [{"node": "HTTP - SendDM Welcome","type": "main","index": 0}],
+        [{"node": "HTTP - SendDM Welcome","type": "main","index": 0}],
+        []
+      ]
+    }
+  }
+}

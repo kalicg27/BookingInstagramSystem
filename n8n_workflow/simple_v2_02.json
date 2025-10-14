@@ -1,0 +1,556 @@
+{
+  "name": "Instagram Booking Bot - PostgreSQL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode"
+      },
+      "id": "1",
+      "name": "Instagram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body;\nconst senderId = body.entry?.[0]?.messaging?.[0]?.sender?.id;\nconst messageText = body.entry?.[0]?.messaging?.[0]?.message?.text;\nconst postback = body.entry?.[0]?.messaging?.[0]?.postback?.payload;\n\nreturn {\n  senderId: senderId,\n  messageText: messageText || '',\n  postback: postback || '',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "2",
+      "name": "Parse Instagram Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT * FROM conversation_states WHERE sender_id = '{{ $json.senderId }}' LIMIT 1"
+      },
+      "id": "3",
+      "name": "Get Conversation State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst messageText = $input.first().json.messageText;\nconst postback = $input.first().json.postback;\nconst dbRows = $input.last().json;\n\nlet state = { stage: 'initial', data: {} };\n\nif (dbRows && dbRows.length > 0 && dbRows[0].state_data) {\n  try {\n    state = dbRows[0].state_data;\n  } catch (e) {\n    state = { stage: 'initial', data: {} };\n  }\n}\n\nif (postback === 'btn_booking') {\n  state.stage = 'awaiting_name';\n} else if (postback === 'btn_chat') {\n  state.stage = 'chat_mode';\n} else if (postback && postback.startsWith('slot_')) {\n  state.data.selectedSlot = postback;\n  state.stage = 'slot_selected';\n}\n\nreturn {\n  senderId: senderId,\n  messageText: messageText,\n  postback: postback,\n  stage: state.stage,\n  userData: state.data\n};"
+      },
+      "id": "4",
+      "name": "Process State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.stage }}",
+                    "value2": "initial"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.stage }}",
+                    "value2": "chat_mode"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.stage }}",
+                    "value2": "awaiting_name"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.stage }}",
+                    "value2": "awaiting_email"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.stage }}",
+                    "value2": "awaiting_phone"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.stage }}",
+                    "value2": "awaiting_date"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.stage }}",
+                    "value2": "slot_selected"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "5",
+      "name": "Route by Stage",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "YOUR_INSTAGRAM_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.senderId }}\"},\n  \"message\": {\n    \"text\": \"Hi! 👋 Welcome!\\n\\nHow can we help?\",\n    \"quick_replies\": [\n      {\"content_type\": \"text\", \"title\": \"✂️ Book Haircut\", \"payload\": \"btn_booking\"},\n      {\"content_type\": \"text\", \"title\": \"💬 Chat\", \"payload\": \"btn_chat\"}\n    ]\n  }\n}"
+      },
+      "id": "10",
+      "name": "Send Initial Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO conversation_states (sender_id, state_data)\nVALUES ('{{ $json.senderId }}', '{\"stage\": \"initial\", \"data\": {}}'::jsonb)\nON CONFLICT (sender_id) \nDO UPDATE SET state_data = '{\"stage\": \"initial\", \"data\": {}}'::jsonb, updated_at = NOW()"
+      },
+      "id": "11",
+      "name": "Save Initial State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1440, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "YOUR_INSTAGRAM_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.senderId }}\"},\n  \"message\": {\n    \"text\": \"Thank you! 💬 Our team will respond shortly.\"\n  }\n}"
+      },
+      "id": "20",
+      "name": "Send Chat Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourbarbershop.com",
+        "toEmail": "admin@yourbarbershop.com",
+        "subject": "New Instagram Chat",
+        "message": "=User: {{ $json.senderId }}\nTime: {{ $now.toISO() }}"
+      },
+      "id": "21",
+      "name": "Notify Admin",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1440, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nuserData.name = messageText;\n\nreturn {\n  senderId: senderId,\n  message: \"Please provide your email:\",\n  stage: 'awaiting_email',\n  userData: userData\n};"
+      },
+      "id": "30",
+      "name": "Process Name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nif (!emailRegex.test(messageText)) {\n  return {\n    senderId: senderId,\n    message: \"Please provide a valid email:\",\n    stage: 'awaiting_email',\n    userData: userData,\n    valid: false\n  };\n}\n\nuserData.email = messageText.trim().toLowerCase();\n\nreturn {\n  senderId: senderId,\n  email: userData.email,\n  stage: 'check_email',\n  userData: userData,\n  valid: true\n};"
+      },
+      "id": "40",
+      "name": "Validate Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT * FROM get_or_create_client(\n  '{{ $json.senderId }}',\n  {{ $json.userData.name ? \"'\" + $json.userData.name + \"'\" : 'NULL' }},\n  '{{ $json.userData.email }}',\n  NULL\n)"
+      },
+      "id": "41",
+      "name": "Get or Create Client",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1440, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.last().json[0];\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\n\nuserData.clientId = result.client_id;\nuserData.email = result.email;\nuserData.name = result.name;\nuserData.phone = result.phone;\nuserData.isNew = result.is_new;\n\nif (result.phone) {\n  return {\n    senderId: senderId,\n    message: `Welcome back ${result.name}! What date? (YYYY-MM-DD)`,\n    stage: 'awaiting_date',\n    userData: userData\n  };\n} else {\n  return {\n    senderId: senderId,\n    message: \"Please provide your phone number:\",\n    stage: 'awaiting_phone',\n    userData: userData\n  };\n}"
+      },
+      "id": "42",
+      "name": "Process Client",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nuserData.phone = messageText;\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  stage: 'update_phone'\n};"
+      },
+      "id": "50",
+      "name": "Process Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 500]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE clients\nSET \n  phone = '{{ $json.userData.phone }}',\n  name = COALESCE('{{ $json.userData.name }}', name),\n  updated_at = NOW()\nWHERE instagram_id = '{{ $json.senderId }}'\nRETURNING *"
+      },
+      "id": "51",
+      "name": "Update Client Phone",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1440, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData;\n\nreturn {\n  senderId: senderId,\n  message: \"What date would you like? (YYYY-MM-DD)\",\n  stage: 'awaiting_date',\n  userData: userData\n};"
+      },
+      "id": "52",
+      "name": "Ask Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nif (!messageText) {\n  return {\n    senderId: senderId,\n    message: \"Please provide a date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\nconst dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\nif (!dateRegex.test(messageText)) {\n  return {\n    senderId: senderId,\n    message: \"Use format: YYYY-MM-DD\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\nconst selectedDate = new Date(messageText);\nconst today = new Date();\ntoday.setHours(0,0,0,0);\n\nif (selectedDate < today) {\n  return {\n    senderId: senderId,\n    message: \"Select a future date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\nuserData.date = messageText;\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  date: messageText,\n  valid: true\n};"
+      },
+      "id": "60",
+      "name": "Validate Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 600]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "start": "={{ $json.date }}T00:00:00",
+        "end": "={{ $json.date }}T23:59:59",
+        "returnAll": true
+      },
+      "id": "61",
+      "name": "Get Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 2,
+      "position": [1440, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const events = $input.all();\nconst userData = $input.first().json.userData;\nconst senderId = $input.first().json.senderId;\nconst date = $input.first().json.date;\n\nconst slots = [\n  {start: '09:00', end: '10:00', id: 'slot_1', display: '09:00-10:00'},\n  {start: '12:00', end: '13:00', id: 'slot_2', display: '12:00-13:00'},\n  {start: '14:00', end: '15:00', id: 'slot_3', display: '14:00-15:00'},\n  {start: '16:00', end: '17:00', id: 'slot_4', display: '16:00-17:00'},\n  {start: '19:00', end: '20:00', id: 'slot_5', display: '19:00-20:00'}\n];\n\nconst booked = events.map(e => {\n  if (!e.json.start) return null;\n  const t = new Date(e.json.start.dateTime || e.json.start.date);\n  return String(t.getHours()).padStart(2,'0') + ':00';\n}).filter(t => t);\n\nconst available = slots.filter(s => !booked.includes(s.start));\n\nif (available.length === 0) {\n  return {\n    senderId: senderId,\n    message: \"Fully booked! Try another date:\",\n    stage: 'awaiting_date',\n    userData: userData\n  };\n}\n\nconst quickReplies = available.map(s => ({\n  content_type: \"text\",\n  title: s.display,\n  payload: s.id\n}));\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  quickReplies: quickReplies,\n  message: \"Available slots:\",\n  stage: 'showing_slots'\n};"
+      },
+      "id": "62",
+      "name": "Calculate Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "YOUR_INSTAGRAM_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.senderId }}\"},\n  \"message\": {\n    \"text\": \"{{ $json.message }}\",\n    \"quick_replies\": {{ JSON.stringify($json.quickReplies || []) }}\n  }\n}"
+      },
+      "id": "63",
+      "name": "Send Slots",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1840, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData;\nconst slotId = userData.selectedSlot;\n\nconst times = {\n  'slot_1': {start: '09:00', end: '10:00'},\n  'slot_2': {start: '12:00', end: '13:00'},\n  'slot_3': {start: '14:00', end: '15:00'},\n  'slot_4': {start: '16:00', end: '17:00'},\n  'slot_5': {start: '19:00', end: '20:00'}\n};\n\nconst time = times[slotId];\nuserData.startTime = time.start;\nuserData.endTime = time.end;\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  summary: `Haircut - ${userData.name}`,\n  description: `Client: ${userData.name}\\nEmail: ${userData.email}\\nPhone: ${userData.phone}\\nInstagram: ${senderId}`,\n  start: `${userData.date}T${time.start}:00`,\n  end: `${userData.date}T${time.end}:00`\n};"
+      },
+      "id": "70",
+      "name": "Prepare Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 700]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "summary": "={{ $json.summary }}",
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "additionalFields": {
+          "description": "={{ $json.description }}"
+        }
+      },
+      "id": "71",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 2,
+      "position": [1440, 700]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT create_appointment(\n  '{{ $json.senderId }}',\n  '{{ $json.userData.date }}'::DATE,\n  '{{ $json.userData.startTime }}'::TIME,\n  60,\n  '{{ $json.id }}'\n) AS appointment_id"
+      },
+      "id": "72",
+      "name": "Create Appointment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1640, 700]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEETS_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client_ID": "={{ $json.userData.clientId }}",
+            "Name": "={{ $json.userData.name }}",
+            "Email": "={{ $json.userData.email }}",
+            "Phone": "={{ $json.userData.phone }}",
+            "Status": "active",
+            "Created_At": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "73",
+      "name": "Sync to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1840, 700]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourbarbershop.com",
+        "toEmail": "={{ $json.userData.email }}",
+        "subject": "Appointment Confirmed",
+        "message": "=Your appointment:\\nDate: {{ $json.userData.date }}\\nTime: {{ $json.userData.startTime }}"
+      },
+      "id": "74",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [2040, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "YOUR_INSTAGRAM_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.senderId }}\"},\n  \"message\": {\n    \"text\": \"✅ Confirmed!\\n\\nDate: {{ $json.userData.date }}\\nTime: {{ $json.userData.startTime }}\\n\\nSee you! 👋\"\n  }\n}"
+      },
+      "id": "75",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2240, 700]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=DELETE FROM conversation_states WHERE sender_id = '{{ $json.senderId }}'"
+      },
+      "id": "76",
+      "name": "Clear State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2440, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "YOUR_INSTAGRAM_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.senderId }}\"},\n  \"message\": {\n    \"text\": \"{{ $json.message }}\"\n  }\n}"
+      },
+      "id": "80",
+      "name": "Send Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2040, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO conversation_states (sender_id, state_data)\nVALUES ('{{ $json.senderId }}', '{{ JSON.stringify({stage: $json.stage, data: $json.userData}) }}'::jsonb)\nON CONFLICT (sender_id)\nDO UPDATE SET state_data = '{{ JSON.stringify({stage: $json.stage, data: $json.userData}) }}'::jsonb, updated_at = NOW()"
+      },
+      "id": "81",
+      "name": "Save State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2240, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"success\"}"
+      },
+      "id": "99",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2440, 400]
+    }
+  ],
+  "connections": {
+    "Instagram Webhook": {
+      "main": [[{"node": "Parse Instagram Data", "type": "main", "index": 0}]]
+    },
+    "Parse Instagram Data": {
+      "main": [[{"node": "Get Conversation State", "type": "main", "index": 0}]]
+    },
+    "Get Conversation State": {
+      "main": [[{"node": "Process State", "type": "main", "index": 0}]]
+    },
+    "Process State": {
+      "main": [[{"node": "Route by Stage", "type": "main", "index": 0}]]
+    },
+    "Route by Stage": {
+      "main": [
+        [{"node": "Send Initial Message", "type": "main", "index": 0}],
+        [{"node": "Send Chat Response", "type": "main", "index": 0}],
+        [{"node": "Process Name", "type": "main", "index": 0}],
+        [{"node": "Validate Email", "type": "main", "index": 0}],
+        [{"node": "Process Phone", "type": "main", "index": 0}],
+        [{"node": "Validate Date", "type": "main", "index": 0}],
+        [{"node": "Prepare Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Send Initial Message": {
+      "main": [[{"node": "Save Initial State", "type": "main", "index": 0}]]
+    },
+    "Save Initial State": {
+      "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+    },
+    "Send Chat Response": {
+      "main": [[{"node": "Notify Admin", "type": "main", "index": 0}]]
+    },
+    "Notify Admin": {
+      "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+    },
+    "Process Name": {
+      "main": [[{"node": "Send Message", "type": "main", "index": 0}]]
+    },
+    "Validate Email": {
+      "main": [[{"node": "Get or Create Client", "type": "main", "index": 0}]]
+    },
+    "Get or Create Client": {
+      "main": [[{"node": "Process Client", "type": "main", "index": 0}]]
+    },
+    "Process Client": {
+      "main": [[{"node": "Send Message", "type": "main", "index": 0}]]
+    },
+    "Process Phone": {
+      "main": [[{"node": "Update Client Phone", "type": "main", "index": 0}]]
+    },
+    "Update Client Phone": {
+      "main": [[{"node": "Ask Date", "type": "main", "index": 0}]]
+    },
+    "Ask Date": {
+      "main": [[{"node": "Send Message", "type": "main", "index": 0}]]
+    },
