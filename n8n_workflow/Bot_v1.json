@@ -1,0 +1,386 @@
+{
+  "name": "Instagram Booking Bot - Main Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Instagram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "instagram-dm-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract sender ID and message from Instagram webhook\nconst body = $input.item.json.body;\nconst senderId = body.entry?.[0]?.messaging?.[0]?.sender?.id;\nconst messageText = body.entry?.[0]?.messaging?.[0]?.message?.text;\nconst postback = body.entry?.[0]?.messaging?.[0]?.postback?.payload;\n\nreturn {\n  senderId: senderId,\n  messageText: messageText || '',\n  postback: postback || '',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Instagram Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "conversation_{{ $json.senderId }}"
+      },
+      "id": "get-state",
+      "name": "Get Conversation State",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize or parse conversation state\nconst senderId = $input.first().json.senderId;\nconst messageText = $input.first().json.messageText;\nconst postback = $input.first().json.postback;\nconst redisData = $input.first().json.value;\n\nlet state = {\n  stage: 'initial',\n  data: {}\n};\n\nif (redisData) {\n  try {\n    state = JSON.parse(redisData);\n  } catch (e) {\n    state = { stage: 'initial', data: {} };\n  }\n}\n\n// Handle button postbacks\nif (postback) {\n  if (postback === 'btn_booking') {\n    state.stage = 'awaiting_name';\n  } else if (postback === 'btn_chat') {\n    state.stage = 'chat_mode';\n  } else if (postback.startsWith('slot_')) {\n    state.data.selectedSlot = postback;\n    state.stage = 'booking_confirmed';\n  } else if (postback === 'btn_active') {\n    state.stage = 'reminder_confirmed';\n  } else if (postback === 'btn_cancel') {\n    state.stage = 'cancel_appointment';\n  } else if (postback === 'btn_rebook') {\n    state.stage = 'awaiting_date';\n  }\n}\n\nreturn {\n  senderId: senderId,\n  messageText: messageText,\n  postback: postback,\n  currentStage: state.stage,\n  userData: state.data,\n  fullState: state\n};"
+      },
+      "id": "process-state",
+      "name": "Process State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "initial"
+            }
+          ]
+        }
+      },
+      "id": "route-initial",
+      "name": "Is Initial?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.instagramAccessToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={\"id\": \"{{ $json.senderId }}\"}"
+            },
+            {
+              "name": "message",
+              "value": "={\"text\": \"Hi! Would you like to book a haircut or have a chat?\", \"quick_replies\": [{\"content_type\": \"text\", \"title\": \"Book Haircut\", \"payload\": \"btn_booking\"}, {\"content_type\": \"text\", \"title\": \"Chat\", \"payload\": \"btn_chat\"}]}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-initial",
+      "name": "Send Initial Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_name"
+            }
+          ]
+        }
+      },
+      "id": "route-name",
+      "name": "Is Awaiting Name?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// If initial stage, ask for name\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\n\n// Store the message text as name\nconst messageText = $input.first().json.messageText;\n\nif (!messageText) {\n  return {\n    senderId: senderId,\n    message: \"Please provide your name:\",\n    stage: 'awaiting_name',\n    userData: userData\n  };\n}\n\nuserData.name = messageText;\n\nreturn {\n  senderId: senderId,\n  message: \"Please provide your email address:\",\n  stage: 'awaiting_email',\n  userData: userData\n};"
+      },
+      "id": "process-name",
+      "name": "Process Name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_email"
+            }
+          ]
+        }
+      },
+      "id": "route-email",
+      "name": "Is Awaiting Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process email and validate\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\n// Simple email validation\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nif (!emailRegex.test(messageText)) {\n  return {\n    senderId: senderId,\n    message: \"Please provide a valid email address:\",\n    stage: 'awaiting_email',\n    userData: userData,\n    valid: false\n  };\n}\n\nuserData.email = messageText;\n\nreturn {\n  senderId: senderId,\n  message: \"Please provide your phone number:\",\n  stage: 'awaiting_phone',\n  userData: userData,\n  valid: true\n};"
+      },
+      "id": "process-email",
+      "name": "Process Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_phone"
+            }
+          ]
+        }
+      },
+      "id": "route-phone",
+      "name": "Is Awaiting Phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process phone\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nuserData.phone = messageText;\n\nreturn {\n  senderId: senderId,\n  message: \"What day would you like to book your haircut? (Please use format: YYYY-MM-DD)\",\n  stage: 'awaiting_date',\n  userData: userData\n};"
+      },
+      "id": "process-phone",
+      "name": "Process Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.currentStage }}",
+              "operation": "equals",
+              "value2": "awaiting_date"
+            }
+          ]
+        }
+      },
+      "id": "route-date",
+      "name": "Is Awaiting Date?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 1100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and validate date\nconst senderId = $input.first().json.senderId;\nconst userData = $input.first().json.userData || {};\nconst messageText = $input.first().json.messageText;\n\nif (!messageText) {\n  return {\n    senderId: senderId,\n    message: \"We can't make an appointment without a date. Please provide a date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\n// Validate date format\nconst dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\nif (!dateRegex.test(messageText)) {\n  return {\n    senderId: senderId,\n    message: \"Please use the format YYYY-MM-DD (e.g., 2024-12-25):\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\nconst selectedDate = new Date(messageText);\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nif (selectedDate < today) {\n  return {\n    senderId: senderId,\n    message: \"Please select a future date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    valid: false\n  };\n}\n\nuserData.date = messageText;\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  date: messageText,\n  stage: 'checking_availability',\n  valid: true\n};"
+      },
+      "id": "process-date",
+      "name": "Process Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 1100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ $credentials.googleCalendarId }}/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeMin",
+              "value": "={{ $json.date }}T00:00:00Z"
+            },
+            {
+              "name": "timeMax",
+              "value": "={{ $json.date }}T23:59:59Z"
+            },
+            {
+              "name": "singleEvents",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-calendar",
+      "name": "Check Calendar Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1450, 1100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate available slots\nconst events = $input.first().json.items || [];\nconst userData = $input.first().json.userData;\nconst senderId = $input.first().json.senderId;\n\n// Business hours: 9-20 (9 AM to 8 PM)\nconst businessHours = [\n  { start: '09:00', end: '10:00', id: 'slot_1' },\n  { start: '12:00', end: '13:00', id: 'slot_2' },\n  { start: '14:00', end: '15:00', id: 'slot_3' },\n  { start: '16:00', end: '17:00', id: 'slot_4' },\n  { start: '19:00', end: '20:00', id: 'slot_5' }\n];\n\n// Get booked slots\nconst bookedSlots = events.map(event => {\n  const start = new Date(event.start.dateTime || event.start.date);\n  return start.getHours() + ':' + String(start.getMinutes()).padStart(2, '0');\n});\n\n// Filter available slots\nconst availableSlots = businessHours.filter(slot => {\n  return !bookedSlots.includes(slot.start);\n});\n\nif (availableSlots.length === 0) {\n  return {\n    senderId: senderId,\n    message: \"Sorry, this day is fully booked. Please choose another date:\",\n    stage: 'awaiting_date',\n    userData: userData,\n    dayFull: true\n  };\n}\n\nreturn {\n  senderId: senderId,\n  userData: userData,\n  availableSlots: availableSlots,\n  stage: 'showing_slots',\n  dayFull: false\n};"
+      },
+      "id": "calculate-slots",
+      "name": "Calculate Available Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 1100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.instagramAccessToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.senderId }}\"},\n  \"message\": {\n    \"text\": \"{{ $json.message }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-message",
+      "name": "Send Message to Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1850, 500]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=conversation_{{ $json.senderId }}",
+        "value": "={{ JSON.stringify({ stage: $json.stage, data: $json.userData }) }}",
+        "ttl": 86400
+      },
+      "id": "save-state",
+      "name": "Save Conversation State",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2050, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\" }",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2250, 500]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Instagram Webhook": {
+      "main": [[{ "node": "Parse Instagram Data", "type": "main", "index": 0 }]]
+    },
+    "Parse Instagram Data": {
+      "main": [[{ "node": "Get Conversation State", "type": "main", "index": 0 }]]
+    },
+    "Get Conversation State": {
+      "main": [[{ "node": "Process State", "type": "main", "index": 0 }]]
+    },
+    "Process State": {
+      "main": [[{ "node": "Is Initial?", "type": "main", "index": 0 }]]
+    },
+    "Is Initial?": {
+      "main": [
+        [{ "node": "Send Initial Message", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Name?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Initial Message": {
+      "main": [[{ "node": "Save Conversation State", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Name?": {
+      "main": [
+        [{ "node": "Process Name", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Email?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Name": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Email?": {
+      "main": [
+        [{ "node": "Process Email", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Phone?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Email": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Phone?": {
+      "main": [
+        [{ "node": "Process Phone", "type": "main", "index": 0 }],
+        [{ "node": "Is Awaiting Date?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Phone": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Is Awaiting Date?": {
+      "main": [[{ "node": "Process Date", "type": "main", "index": 0 }]]
+    },
+    "Process Date": {
+      "main": [[{ "node": "Check Calendar Availability", "type": "main", "index": 0 }]]
+    },
+    "Check Calendar Availability": {
+      "main": [[{ "node": "Calculate Available Slots", "type": "main", "index": 0 }]]
+    },
+    "Calculate Available Slots": {
+      "main": [[{ "node": "Send Message to Instagram", "type": "main", "index": 0 }]]
+    },
+    "Send Message to Instagram": {
+      "main": [[{ "node": "Save Conversation State", "type": "main", "index": 0 }]]
+    },
+    "Save Conversation State": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "1",
+  "meta": {
+    "instanceId": "your-instance-id"
+  },
+  "tags": []
+}

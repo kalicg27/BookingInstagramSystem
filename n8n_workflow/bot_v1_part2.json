@@ -1,0 +1,281 @@
+{
+  "name": "Instagram Booking Bot - Reminder System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate time range: 1.5 to 2.5 hours from now\nconst now = new Date();\nconst startTime = new Date(now.getTime() + (90 * 60 * 1000)); // 1.5 hours\nconst endTime = new Date(now.getTime() + (150 * 60 * 1000)); // 2.5 hours\n\nreturn {\n  timeMin: startTime.toISOString(),\n  timeMax: endTime.toISOString(),\n  currentTime: now.toISOString()\n};"
+      },
+      "id": "calculate-time-range",
+      "name": "Calculate Time Range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list",
+          "cachedResultName": "Primary"
+        },
+        "start": "={{ $json.timeMin }}",
+        "end": "={{ $json.timeMax }}",
+        "returnAll": true,
+        "options": {
+          "timeZone": "Europe/Warsaw"
+        }
+      },
+      "id": "get-upcoming-appointments",
+      "name": "Get Upcoming Appointments",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-appointments",
+      "name": "Has Appointments?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {},
+      "id": "split-appointments",
+      "name": "Split Into Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract appointment details\nconst event = $input.first().json;\n\nconst summary = event.summary || 'Haircut Appointment';\nconst description = event.description || '';\nconst eventId = event.id;\nconst startTime = event.start?.dateTime || event.start?.date;\nconst endTime = event.end?.dateTime || event.end?.date;\n\n// Extract client info from description\nconst emailMatch = description.match(/Email: ([^\\n]+)/);\nconst phoneMatch = description.match(/Phone: ([^\\n]+)/);\nconst instagramMatch = description.match(/Instagram ID: ([^\\n]+)/);\nconst nameMatch = summary.match(/Haircut - (.+)/);\n\nconst clientEmail = emailMatch ? emailMatch[1].trim() : null;\nconst clientPhone = phoneMatch ? phoneMatch[1].trim() : null;\nconst instagramId = instagramMatch ? instagramMatch[1].trim() : null;\nconst clientName = nameMatch ? nameMatch[1].trim() : 'Client';\n\nconst appointmentDate = new Date(startTime);\nconst now = new Date();\nconst minutesUntil = Math.round((appointmentDate - now) / 60000);\n\nreturn {\n  eventId: eventId,\n  clientName: clientName,\n  clientEmail: clientEmail,\n  clientPhone: clientPhone,\n  instagramId: instagramId,\n  startTime: startTime,\n  endTime: endTime,\n  appointmentDate: appointmentDate.toISOString(),\n  minutesUntil: minutesUntil,\n  formattedTime: appointmentDate.toLocaleString('en-US', { \n    weekday: 'long', \n    year: 'numeric', \n    month: 'long', \n    day: 'numeric',\n    hour: '2-digit',\n    minute: '2-digit'\n  })\n};"
+      },
+      "id": "parse-appointment",
+      "name": "Parse Appointment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "reminder_sent_{{ $json.eventId }}"
+      },
+      "id": "check-reminder-sent",
+      "name": "Check If Reminder Sent",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.value }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "reminder-not-sent",
+      "name": "Reminder Not Sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.instagramId }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "has-instagram-id",
+      "name": "Has Instagram ID?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1850, 100]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "lookup",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $credentials.googleSheetsId }}",
+          "mode": "list",
+          "cachedResultName": "Clients Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "lookupColumn": "Email",
+        "lookupValue": "={{ $json.clientEmail }}"
+      },
+      "id": "lookup-instagram-id",
+      "name": "Lookup Instagram ID from Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2050, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge Instagram ID from sheets if available\nconst appointmentData = $input.first().json;\nconst sheetData = $input.last().json;\n\nlet instagramId = appointmentData.instagramId;\n\nif (sheetData.Instagram_ID) {\n  instagramId = sheetData.Instagram_ID;\n}\n\nif (!instagramId) {\n  throw new Error('No Instagram ID found for client');\n}\n\nreturn {\n  ...appointmentData,\n  instagramId: instagramId\n};"
+      },
+      "id": "merge-instagram-id",
+      "name": "Merge Instagram ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 150]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.instagramAccessToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $json.instagramId }}\"},\n  \"message\": {\n    \"text\": \"⏰ Reminder: You have a haircut appointment in {{ $json.minutesUntil }} minutes!\\n\\n📅 {{ $json.formattedTime }}\\n📍 [Your Barbershop Address]\\n\\nSee you soon!\",\n    \"quick_replies\": [\n      {\"content_type\": \"text\", \"title\": \"✅ I'm Coming\", \"payload\": \"btn_active\"},\n      {\"content_type\": \"text\", \"title\": \"📅 Rebook\", \"payload\": \"btn_rebook\"},\n      {\"content_type\": \"text\", \"title\": \"❌ Cancel\", \"payload\": \"btn_cancel\"}\n    ]\n  }\n}",
+        "options": {}
+      },
+      "id": "send-reminder-dm",
+      "name": "Send Reminder DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2450, 150]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=reminder_sent_{{ $json.eventId }}",
+        "value": "sent",
+        "ttl": 86400
+      },
+      "id": "mark-reminder-sent",
+      "name": "Mark Reminder as Sent",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2650, 150]
+    },
+    {
+      "parameters": {},
+      "id": "loop-back",
+      "name": "Loop Back",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2850, 150]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 30 Minutes": {
+      "main": [[{ "node": "Calculate Time Range", "type": "main", "index": 0 }]]
+    },
+    "Calculate Time Range": {
+      "main": [[{ "node": "Get Upcoming Appointments", "type": "main", "index": 0 }]]
+    },
+    "Get Upcoming Appointments": {
+      "main": [[{ "node": "Has Appointments?", "type": "main", "index": 0 }]]
+    },
+    "Has Appointments?": {
+      "main": [
+        [{ "node": "Split Into Items", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Into Items": {
+      "main": [
+        [{ "node": "Parse Appointment Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Appointment Data": {
+      "main": [[{ "node": "Check If Reminder Sent", "type": "main", "index": 0 }]]
+    },
+    "Check If Reminder Sent": {
+      "main": [[{ "node": "Reminder Not Sent?", "type": "main", "index": 0 }]]
+    },
+    "Reminder Not Sent?": {
+      "main": [
+        [{ "node": "Has Instagram ID?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Instagram ID?": {
+      "main": [
+        [{ "node": "Merge Instagram ID", "type": "main", "index": 0 }],
+        [{ "node": "Lookup Instagram ID from Sheets", "type": "main", "index": 0 }]
+      ]
+    },
+    "Lookup Instagram ID from Sheets": {
+      "main": [[{ "node": "Merge Instagram ID", "type": "main", "index": 0 }]]
+    },
+    "Merge Instagram ID": {
+      "main": [[{ "node": "Send Reminder DM", "type": "main", "index": 0 }]]
+    },
+    "Send Reminder DM": {
+      "main": [[{ "node": "Mark Reminder as Sent", "type": "main", "index": 0 }]]
+    },
+    "Mark Reminder as Sent": {
+      "main": [[{ "node": "Loop Back", "type": "main", "index": 0 }]]
+    },
+    "Loop Back": {
+      "main": [[{ "node": "Split Into Items", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "instagram-booking-reminder",
+  "meta": {
+    "instanceId": "your-instance-id"
+  },
+  "tags": []
+}
