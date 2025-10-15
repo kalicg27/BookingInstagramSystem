@@ -1,0 +1,113 @@
+{
+  "name": "Chat: Name → Email (with Data Store)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ChatTrigger1",
+      "name": "Chat Trigger",
+      "type": "n8n-nodes-base.chatTrigger",
+      "typeVersion": 1,
+      "position": [260, 240]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataMode": "json",
+        "key": "={{ $json.chatId }}",
+        "options": {
+          "returnAll": false
+        }
+      },
+      "id": "DSGet1",
+      "name": "Data Store: Get",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
+      "position": [520, 180],
+      "notesInFlow": true,
+      "notes": "Reads state for this chatId.\nData format we store: { stage, name, email }",
+      "credentials": {
+        "dataStoreFirebaseApi": {
+          "id": "__DATASOURCE__:booking-bot",
+          "name": "booking-bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Input 0: Chat Trigger (message + chatId)\n// Input 1: Data Store: Get (previous state)\nconst chat = $items(0)[0].json;\nconst prev = ($items(1)[0]?.json?.data) || {};\n\nconst chatId = chat.chatId;\nconst text = String(chat.message || '').trim();\n\n// Previous or default state\nlet stage = prev.stage || 'awaiting_name';\nlet name  = prev.name  || null;\nlet email = prev.email || null;\nlet reply;\n\n// Simple email validator\nconst isEmail = (s) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s);\n\nif (stage === 'awaiting_name') {\n  if (text) {\n    name = text;\n    stage = 'awaiting_email';\n    reply = `Nice to meet you, ${name}! Please provide your email:`;\n  } else {\n    reply = 'Please provide your Name:';\n  }\n}\nelse if (stage === 'awaiting_email') {\n  if (isEmail(text)) {\n    email = text.toLowerCase();\n    stage = 'done';\n    reply = `Thanks! Saved: ${name} / ${email}.`;\n  } else {\n    reply = 'That email doesn’t look valid. Please enter a valid email:';\n  }\n}\nelse if (stage === 'done') {\n  reply = `You’re already set: ${name} / ${email}.`;\n}\n\nreturn [{ json: { chatId, reply, stage, name, email } }];"
+      },
+      "id": "FnState1",
+      "name": "Function: State Machine",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [760, 240],
+      "notesInFlow": true,
+      "notes": "Moves through awaiting_name → awaiting_email → done"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "dataMode": "json",
+        "key": "={{ $json.chatId }}",
+        "dataJson": "={ \"stage\": $json.stage, \"name\": $json.name, \"email\": $json.email }"
+      },
+      "id": "DSSet1",
+      "name": "Data Store: Set",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
+      "position": [1000, 240],
+      "credentials": {
+        "dataStoreFirebaseApi": {
+          "id": "__DATASOURCE__:booking-bot",
+          "name": "booking-bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "message": "={{ $json.reply }}"
+      },
+      "id": "ChatRespond1",
+      "name": "Respond to Chat",
+      "type": "n8n-nodes-base.respondToChat",
+      "typeVersion": 1,
+      "position": [1220, 240]
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          { "node": "Data Store: Get", "type": "main", "index": 0 },
+          { "node": "Function: State Machine", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Data Store: Get": {
+      "main": [
+        [
+          { "node": "Function: State Machine", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Function: State Machine": {
+      "main": [
+        [
+          { "node": "Data Store: Set", "type": "main", "index": 0 },
+          { "node": "Respond to Chat", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Data Store: Set": {
+      "main": [
+        [
+          { "node": "Respond to Chat", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetup": true
+  }
+}

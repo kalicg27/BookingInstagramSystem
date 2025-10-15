@@ -1,0 +1,100 @@
+{
+  "name": "Instagram Booking Bot - Simple",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode"
+      },
+      "id": "1",
+      "name": "Instagram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body;\nconst senderId = body.entry?.[0]?.messaging?.[0]?.sender?.id;\nconst messageText = body.entry?.[0]?.messaging?.[0]?.message?.text;\nconst postback = body.entry?.[0]?.messaging?.[0]?.postback?.payload;\n\nreturn {\n  senderId: senderId,\n  messageText: messageText || '',\n  postback: postback || ''\n};"
+      },
+      "id": "2",
+      "name": "Parse Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT * FROM conversation_states WHERE sender_id = '{{ $json.senderId }}' LIMIT 1"
+      },
+      "id": "3",
+      "name": "Get State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const senderId = $input.first().json.senderId;\nconst messageText = $input.first().json.messageText;\nconst postback = $input.first().json.postback;\nconst dbResult = $input.last().json;\n\nlet state = { stage: 'initial', data: {} };\n\nif (dbResult && dbResult.state_data) {\n  try {\n    state = JSON.parse(dbResult.state_data);\n  } catch (e) {}\n}\n\nif (postback === 'btn_booking') state.stage = 'awaiting_email';\nelse if (postback === 'btn_chat') state.stage = 'chat_mode';\nelse if (postback.startsWith('slot_')) {\n  state.data.selectedSlot = postback;\n  state.stage = 'slot_selected';\n}\n\nreturn {\n  senderId,\n  messageText,\n  postback,\n  stage: state.stage,\n  userData: state.data\n};"
+      },
+      "id": "4",
+      "name": "Process State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.stage }}",
+              "value2": "initial"
+            }
+          ]
+        }
+      },
+      "id": "5",
+      "name": "Route by Stage",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\" }"
+      },
+      "id": "99",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2400, 300]
+    }
+  ],
+  "connections": {
+    "Instagram Webhook": {
+      "main": [[{"node": "Parse Data", "type": "main", "index": 0}]]
+    },
+    "Parse Data": {
+      "main": [[{"node": "Get State", "type": "main", "index": 0}]]
+    },
+    "Get State": {
+      "main": [[{"node": "Process State", "type": "main", "index": 0}]]
+    },
+    "Process State": {
+      "main": [[{"node": "Route by Stage", "type": "main", "index": 0}]]
+    },
+    "Route by Stage": {
+      "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-15T10:00:00.000Z",
+  "versionId": "1"
+}

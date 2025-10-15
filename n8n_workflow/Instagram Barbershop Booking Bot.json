@@ -1,0 +1,1050 @@
+# n8n Instagram Barbershop Booking Bot Workflow
+
+## Download Instructions
+Copy the JSON code below and save it as a `.json` file, then import it into n8n.
+
+---
+
+## JSON Workflow Code
+
+```json
+{
+  "name": "Instagram Barbershop Booking Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-instagram-trigger",
+      "name": "Instagram DM Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "instagram-dm-receiver"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "chat_history",
+        "columns": "sender_id, message_text, timestamp",
+        "options": {}
+      },
+      "id": "postgres-store-message",
+      "name": "Store Message to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'Hi! Would you like to book a haircut or have a chat?', quick_replies: [{content_type: 'text', title: 'Booking Haircut', payload: 'BOOKING'}, {content_type: 'text', title: 'Chat', payload: 'CHAT'}]}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-welcome-message",
+      "name": "Send Welcome Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.payload }}",
+              "operation": "equals",
+              "value2": "BOOKING"
+            }
+          ]
+        }
+      },
+      "id": "check-button-response",
+      "name": "Check if Booking Selected",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "chat_history",
+        "columns": "sender_id, message_text, action_type, timestamp",
+        "options": {}
+      },
+      "id": "store-booking-choice",
+      "name": "Store Booking Choice",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1050, 200],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'Please provide your name:'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ask-name",
+      "name": "Ask for Name",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook-response",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-name-response",
+      "name": "Wait for Name Response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1450, 200],
+      "webhookId": "instagram-name-receiver"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "bookings",
+        "columns": "sender_id, name, status, created_at",
+        "options": {}
+      },
+      "id": "store-name",
+      "name": "Store Name to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1650, 200],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'Please provide your email address:'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ask-email",
+      "name": "Ask for Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook-email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-email-response",
+      "name": "Wait for Email Response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [2050, 200],
+      "webhookId": "instagram-email-receiver"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "bookings",
+        "updateKey": "sender_id",
+        "columns": "email",
+        "options": {}
+      },
+      "id": "store-email",
+      "name": "Store Email to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [2250, 200],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'Please provide your phone number:'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ask-phone",
+      "name": "Ask for Phone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2450, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook-phone",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-phone-response",
+      "name": "Wait for Phone Response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [2650, 200],
+      "webhookId": "instagram-phone-receiver"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "bookings",
+        "updateKey": "sender_id",
+        "columns": "phone",
+        "options": {}
+      },
+      "id": "store-phone",
+      "name": "Store Phone to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [2850, 200],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Clients Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Email",
+              "lookupValue": "={{ $json.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-email-sheets",
+      "name": "Check Email in Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [3050, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-if-new-user",
+      "name": "Check if New User",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3250, 200]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Clients Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client_ID": "={{ $json.sender_id }}",
+            "Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "Phone": "={{ $json.phone }}",
+            "Status": "pending",
+            "Created_At": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "insert-to-sheets",
+      "name": "Insert to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [3450, 100],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'What day would you like to book your haircut? (Please provide date in format: DD-MM-YYYY)'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ask-date",
+      "name": "Ask for Date",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3650, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook-date",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-date-response",
+      "name": "Wait for Date Response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [3850, 200],
+      "webhookId": "instagram-date-receiver"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.message_text }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "validate-date",
+      "name": "Validate Date Provided",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [4050, 200]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "bookings",
+        "updateKey": "sender_id",
+        "columns": "appointment_date",
+        "options": {}
+      },
+      "id": "store-date",
+      "name": "Store Date to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4250, 100],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'What time would you prefer? (Please provide time in format: HH:MM)'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ask-time",
+      "name": "Ask for Time",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [4450, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-webhook-time",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-time-response",
+      "name": "Wait for Time Response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [4650, 100],
+      "webhookId": "instagram-time-receiver"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "bookings",
+        "updateKey": "sender_id",
+        "columns": "appointment_time, status",
+        "options": {}
+      },
+      "id": "store-time",
+      "name": "Store Time to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4850, 100],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Clients Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Appointment_Date": "={{ $json.appointment_date }}",
+            "Appointment_Time": "={{ $json.appointment_time }}",
+            "Status": "booked"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-sheets-booking",
+      "name": "Update Google Sheets with Booking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [5050, 100],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'Thank you! Your booking request has been saved. We will confirm your appointment on ' + $json.appointment_date + ' at ' + $json.appointment_time + '. See you soon!'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-confirmation",
+      "name": "Send Confirmation Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [5250, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'We cannot make an appointment without a date. Please try again.'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-error-no-date",
+      "name": "Send Error - No Date",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [4050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "recipient",
+              "value": "={{ $json.sender_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify({text: 'Thanks for reaching out! How can I help you today?'}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "chat-handler",
+      "name": "Chat Handler (Placeholder)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Message received",
+        "options": {}
+      },
+      "id": "response-webhook",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [5450, 100]
+    }
+  ],
+  "connections": {
+    "Instagram DM Webhook": {
+      "main": [
+        [
+          {
+            "node": "Store Message to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Message to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Message": {
+      "main": [
+        [
+          {
+            "node": "Check if Booking Selected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Booking Selected": {
+      "main": [
+        [
+          {
+            "node": "Store Booking Choice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chat Handler (Placeholder)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Booking Choice": {
+      "main": [
+        [
+          {
+            "node": "Ask for Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for Name": {
+      "main": [
+        [
+          {
+            "node": "Wait for Name Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Name Response": {
+      "main": [
+        [
+          {
+            "node": "Store Name to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Name to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Ask for Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for Email": {
+      "main": [
+        [
+          {
+            "node": "Wait for Email Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Email Response": {
+      "main": [
+        [
+          {
+            "node": "Store Email to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Email to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Ask for Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for Phone": {
+      "main": [
+        [
+          {
+            "node": "Wait for Phone Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Phone Response": {
+      "main": [
+        [
+          {
+            "node": "Store Phone to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Phone to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Check Email in Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Email in Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Check if New User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if New User": {
+      "main": [
+        [
+          {
+            "node": "Insert to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask for Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Ask for Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for Date": {
+      "main": [
+        [
+          {
+            "node": "Wait for Date Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Date Response": {
+      "main": [
+        [
+          {
+            "node": "Validate Date Provided",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Date Provided": {
+      "main": [
+        [
+          {
+            "node": "Store Date to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error - No Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Date to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Ask for Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for Time": {
+      "main": [
+        [
+          {
+            "node": "Wait for Time Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Time Response": {
+      "main": [
+        [
+          {
+            "node": "Store Time to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Time to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Update Google Sheets with Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Google Sheets with Booking": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation Message": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-13T00:00:00.000Z",
+  "versionId": "1"
+}
+```
+
+---
+
+## Setup Instructions
+
+### 1. PostgreSQL Database Setup
+Create these tables in your PostgreSQL database:
+
+```sql
+-- Chat history table
+CREATE TABLE chat_history (
+    id SERIAL PRIMARY KEY,
+    sender_id VARCHAR(255),
+    message_text TEXT,
+    action_type VARCHAR(50),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Bookings table
+CREATE TABLE bookings (
+    id SERIAL PRIMARY KEY,
+    sender_id VARCHAR(255) UNIQUE,
+    name VARCHAR(255),
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    appointment_date VARCHAR(50),
+    appointment_time VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 2. Google Sheets Setup
+Create a Google Sheet with these columns:
+- Client_ID
+- Name
+- Email
+- Phone
+- Appointment_Date
+- Appointment_Time
+- Status
+- Created_At
+
+### 3. Import into n8n
+1. Copy the JSON code above
+2. Save it as a `.json` file
+3. In n8n, go to **Workflows** → **Import from File**
+4. Select your saved JSON file
+
+### 4. Configure Credentials
+Set up the following in n8n:
+- **Instagram Business API** (OAuth2)
+- **PostgreSQL** database connection
+- **Google Sheets** OAuth2 API
+
+### 5. Update Configuration
+Replace `YOUR_GOOGLE_SHEET_ID` in the workflow with your actual Google Sheet ID
+
+## Workflow Features
+
+✅ Collects customer data: Name, Email, Phone, Date, Time  
+✅ Stores chat history in PostgreSQL  
+✅ Checks for existing users in Google Sheets  
+✅ Stores booking information in both PostgreSQL and Google Sheets  
+✅ Sends confirmation messages via Instagram DM  
+✅ Validates date input before proceeding

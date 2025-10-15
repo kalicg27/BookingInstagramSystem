@@ -1,0 +1,143 @@
+### 1. Incoming Message Handler
+
+```
+ON Instagram_DM_Received(message):
+
+    IF message IS NOT empty:
+        SEND "Hi! Would you like to book a haircut or have a chat?"
+        DISPLAY BUTTONS:
+            - Booking Haircut
+            - Chat
+
+```
+
+---
+
+### 2. Booking Flow
+
+```
+ON Button_Click("Booking Haircut"):
+
+    ASK "Please provide your name:"
+    STORE -> user_name
+
+    ASK "Please provide your email address:"
+    STORE -> user_email
+
+    ASK "Please provide your phone number:"
+    STORE -> user_phone
+
+    # Check if email already exists in Google Sheets
+    IF GoogleSheets.Contains(user_email):
+        SKIP inserting email
+    ELSE:
+        GoogleSheets.InsertRow(user_name, user_email, user_phone)
+
+```
+
+---
+
+### 3. Ask for Appointment Date
+
+```
+ASK "What day would you like to book your haircut?"
+
+WAIT for client response -> user_date
+
+IF user_date IS EMPTY:
+    SEND "We can’t make an appointment without a date."
+    REPEAT ask for date
+ELSE:
+    CONTINUE
+
+```
+
+---
+
+### 4. Check Day Availability
+
+```
+CHECK GoogleCalendar.Availability(user_date)
+
+IF day_is_full:
+    SEND "Sorry, this day is fully booked. Please choose another date."
+    RETURN to Step 3
+ELSE:
+    RETRIEVE 5 available time slots (1-hour each)
+    DISPLAY BUTTONS:
+        1. 09:00 - 10:00
+        2. 12:00 - 13:00
+        3. 14:00 - 15:00
+        4. 16:00 - 17:00
+        5. 19:00 - 20:00
+
+```
+
+---
+
+### 5. Slot Selection and Confirmation
+
+```
+ON TimeSlot_Button_Click(selected_slot):
+
+    RESERVE selected_slot in Google Calendar
+    SEND Email to user_email:
+        SUBJECT: "Confirm your haircut appointment"
+        BODY: "Please confirm your appointment on {user_date} at {selected_slot}"
+
+    WAIT for client email confirmation
+
+    IF confirmed:
+        SEND "Your booking is confirmed! See you soon 👋"
+        GoogleCalendar.MarkAsConfirmed(user_date, selected_slot)
+    ELSE:
+        CANCEL reservation after timeout
+
+```
+
+---
+
+### 6. Reminder System (runs every X minutes via n8n Cron)
+
+```
+FOR each booking in GoogleCalendar:
+
+    IF current_time IS within 2 hours before booking_time:
+        SEND IG_DM to user:
+            "Reminder: You have an appointment today at {time}, {address}"
+            DISPLAY BUTTONS:
+                - Active
+                - Rebook
+                - Cancel Appointment
+
+```
+
+---
+
+### 7. Reminder Actions
+
+```
+ON Button_Click("Active"):
+    SEND "Thanks for working with us! See you at the barbershop."
+
+ON Button_Click("Cancel Appointment"):
+    DELETE booking from Google Calendar
+    SEND "Your appointment has been cancelled."
+
+ON Button_Click("Rebook"):
+    DELETE old booking
+    ASK "Please provide a new date for your appointment."
+    GOTO Step 3
+
+```
+
+---
+
+### 8. Operation Completion
+
+```
+AFTER booking confirmed:
+    SEND confirmation email with appointment details.
+    END.
+
+```

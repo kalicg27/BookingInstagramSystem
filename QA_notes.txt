@@ -1,0 +1,44 @@
+Title: the Enemy AI system is not attacking player when the player comes close 
+Environment: PC ,Windows 11, build 5.12 
+Steps to Reproduce: 1. Lunch game and load the level of “Arena fight” 2. Go to near enemy with the sword weapon 3. Wait few seconds
+Expected Result: The Enemy should start animation attack sequence towards to the player, and give damage to the player
+Actual Result: Enemy just standing with no attacking animation sequence, no damage to the player
+Severity: Major
+
+Title:
+Environment: 
+Steps to Reproduce: 
+Expected Result: 
+Actual Result:
+Severity: Major
+
+Regression Testing:
+Testing previously fixed issues to ensure they do not reappear in the new build.
+
+Critical vs Major Bug:
+A critical bug causes crashes or completely blocks player progress, while a major bug breaks core gameplay features such as movement or combat but does not crash the game.
+
+Test Case:
+A written scenario that describes what to test, how to test it, and what the expected result should be.
+
+Expected vs Actual Results:
+Including them helps developers understand what should happen and what actually happens, making bug reproduction and fixing more accurate.
+
+Smoke Test:
+A quick initial test performed on a new build to confirm that the game launches and basic features work without immediate crashes.
+
+Test Plan
+A document describing overall testing strategy and scope.
+
+Test Case
+A written test scenario describing what to test and expected results.
+
+Smoke Test
+Quick, basic test to see if the build runs at all (menu loads, levels start, no crash).
+
+Regression Test
+Re-testing a previously fixed bug to make sure it doesn’t appear again.
+
+Priority
+How soon the bug should be fixed (decided by developers or leads).
+Example: “Minor visual bug, low priority.”
